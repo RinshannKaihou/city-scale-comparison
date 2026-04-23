@@ -4,6 +4,7 @@
     "name": "Beijing",
     "nameZh": "北京",
     "country": "China",
+    "region": "china",
     "geojson": {
       "type": "MultiPolygon",
       "coordinates": [
@@ -1157,6 +1158,7 @@
     "name": "Shanghai",
     "nameZh": "上海",
     "country": "China",
+    "region": "china",
     "geojson": {
       "type": "Polygon",
       "coordinates": [
@@ -2543,6 +2545,7 @@
     "name": "Tokyo",
     "nameZh": "东京",
     "country": "Japan",
+    "region": "asia",
     "geojson": {
       "type": "Polygon",
       "coordinates": [
@@ -4093,6 +4096,7 @@
     "name": "New York",
     "nameZh": "纽约",
     "country": "USA",
+    "region": "north-america",
     "geojson": {
       "type": "MultiPolygon",
       "coordinates": [
@@ -5699,6 +5703,7 @@
     "name": "London",
     "nameZh": "伦敦",
     "country": "UK",
+    "region": "europe",
     "geojson": {
       "type": "MultiPolygon",
       "coordinates": [
@@ -7267,6 +7272,7 @@
     "name": "Paris",
     "nameZh": "巴黎",
     "country": "France",
+    "region": "europe",
     "geojson": {
       "type": "MultiPolygon",
       "coordinates": [
@@ -8244,6 +8250,7 @@
     "name": "Moscow",
     "nameZh": "莫斯科",
     "country": "Russia",
+    "region": "europe",
     "geojson": {
       "type": "MultiPolygon",
       "coordinates": [
@@ -9464,6 +9471,7 @@
     "name": "Sydney",
     "nameZh": "悉尼",
     "country": "Australia",
+    "region": "asia",
     "geojson": {
       "type": "MultiPolygon",
       "coordinates": [
@@ -10447,6 +10455,7 @@
     "name": "Singapore",
     "nameZh": "新加坡",
     "country": "Singapore",
+    "region": "asia",
     "geojson": {
       "type": "MultiPolygon",
       "coordinates": [
@@ -11550,6 +11559,7 @@
     "name": "Dubai",
     "nameZh": "迪拜",
     "country": "UAE",
+    "region": "asia",
     "geojson": {
       "type": "Polygon",
       "coordinates": [
@@ -11979,6 +11989,7 @@
     "name": "Mumbai",
     "nameZh": "孟买",
     "country": "India",
+    "region": "asia",
     "geojson": {
       "type": "MultiPolygon",
       "coordinates": [
@@ -13358,6 +13369,7 @@
     "name": "São Paulo",
     "nameZh": "圣保罗",
     "country": "Brazil",
+    "region": "south-america",
     "geojson": {
       "type": "MultiPolygon",
       "coordinates": [
@@ -14424,6 +14436,7 @@
     "name": "Cairo",
     "nameZh": "开罗",
     "country": "Egypt",
+    "region": "africa",
     "geojson": {
       "type": "MultiPolygon",
       "coordinates": [
@@ -15189,6 +15202,7 @@
     "name": "Los Angeles",
     "nameZh": "洛杉矶",
     "country": "USA",
+    "region": "north-america",
     "geojson": {
       "type": "MultiPolygon",
       "coordinates": [
@@ -16200,6 +16214,7 @@
     "name": "Seoul",
     "nameZh": "首尔",
     "country": "South Korea",
+    "region": "asia",
     "geojson": {
       "type": "Polygon",
       "coordinates": [
@@ -17682,6 +17697,7 @@
     "name": "Xi'an",
     "nameZh": "西安",
     "country": "China",
+    "region": "china",
     "geojson": {
       "type": "MultiPolygon",
       "coordinates": [
