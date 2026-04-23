@@ -1,8 +1,17 @@
+export type Region =
+  | 'china'
+  | 'asia'
+  | 'europe'
+  | 'north-america'
+  | 'south-america'
+  | 'africa';
+
 export interface CityData {
   id: string;
   name: string;
   nameZh: string;
   country: string;
+  region: Region;
   geojson: GeoJSON.Polygon | GeoJSON.MultiPolygon;
   bbox: [number, number, number, number];
   areaKm2: number;
