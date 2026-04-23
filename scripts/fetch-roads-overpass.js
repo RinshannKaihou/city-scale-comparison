@@ -236,7 +236,18 @@ async function main() {
     console.error(`Missing ${CITIES_PATH}. Run extract-urban-areas.js first.`);
     process.exit(1);
   }
-  const cities = JSON.parse(fs.readFileSync(CITIES_PATH, 'utf-8'));
+  const all = JSON.parse(fs.readFileSync(CITIES_PATH, 'utf-8'));
+
+  const regionArg = process.argv.find((a) => a.startsWith('--region='));
+  const region = regionArg ? regionArg.slice('--region='.length) : null;
+  const cities = region ? all.filter((c) => c.region === region) : all;
+  if (region && cities.length === 0) {
+    console.error(`No cities matched --region=${region}.`);
+    process.exit(1);
+  }
+  if (region) {
+    console.log(`Filtering to region=${region}: ${cities.length} cities.`);
+  }
 
   console.log(`Fetching roads for ${cities.length} cities using urban-area bboxes.`);
   console.log(`  Overpass query timeout: ${QUERY_TIMEOUT_SEC}s`);
