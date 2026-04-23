@@ -2,11 +2,21 @@ import { useState, useEffect, useRef } from 'react';
 import type { CityViewModel, CityData } from '@/types/city';
 import { getCityColor } from '@/lib/colors';
 
+const VISIBLE_CAP = 12;
+
 export function useCityData() {
   const [cities, setCities] = useState<CityViewModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+  const warningTimerRef = useRef<number | null>(null);
   const loadedRef = useRef<Set<string>>(new Set());
+
+  const flashWarning = (msg: string) => {
+    setWarning(msg);
+    if (warningTimerRef.current) window.clearTimeout(warningTimerRef.current);
+    warningTimerRef.current = window.setTimeout(() => setWarning(null), 4000);
+  };
 
   useEffect(() => {
     fetch('/data/cities.json')
@@ -69,9 +79,18 @@ export function useCityData() {
   }, [cities]);
 
   const toggleCity = (id: string) => {
-    setCities((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, visible: !c.visible } : c))
-    );
+    setCities((prev) => {
+      const target = prev.find((c) => c.id === id);
+      if (!target) return prev;
+      const willBeVisible = !target.visible;
+      if (willBeVisible) {
+        const visibleCount = prev.filter((c) => c.visible).length;
+        if (visibleCount >= VISIBLE_CAP) {
+          flashWarning(`已选 ${visibleCount + 1} 个城市，叠加过多可能影响阅读`);
+        }
+      }
+      return prev.map((c) => (c.id === id ? { ...c, visible: willBeVisible } : c));
+    });
   };
 
   const setOffset = (id: string, offset: { x: number; y: number }) => {
@@ -98,6 +117,7 @@ export function useCityData() {
     cities,
     loading,
     error,
+    warning,
     toggleCity,
     setOffset,
     resetOffsets,
