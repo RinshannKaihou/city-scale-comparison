@@ -7,10 +7,11 @@ function App() {
     cities,
     loading,
     error,
+    warning,
     toggleCity,
+    toggleRegion,
     setOffset,
     resetOffsets,
-    selectAll,
     clearAll,
   } = useCityData();
 
@@ -38,9 +39,10 @@ function App() {
     <div className="w-screen h-screen bg-neutral-50 flex overflow-hidden">
       <CitySelector
         cities={cities}
-        onToggle={toggleCity}
+        warning={warning}
+        onToggleCity={toggleCity}
+        onToggleRegion={toggleRegion}
         onReset={resetOffsets}
-        onSelectAll={selectAll}
         onClearAll={clearAll}
       />
       <div className="flex-1 relative">
