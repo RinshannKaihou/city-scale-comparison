@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { CityViewModel, CityData } from '@/types/city';
+import type { CityViewModel, CityData, Region } from '@/types/city';
 import { getCityColor } from '@/lib/colors';
 
 const VISIBLE_CAP = 12;
@@ -93,6 +93,21 @@ export function useCityData() {
     });
   };
 
+  const toggleRegion = (region: Region, nextVisible: boolean) => {
+    setCities((prev) => {
+      const next = prev.map((c) =>
+        c.region === region ? { ...c, visible: nextVisible } : c
+      );
+      if (nextVisible) {
+        const visibleCount = next.filter((c) => c.visible).length;
+        if (visibleCount > VISIBLE_CAP) {
+          flashWarning(`已选 ${visibleCount} 个城市，叠加过多可能影响阅读`);
+        }
+      }
+      return next;
+    });
+  };
+
   const setOffset = (id: string, offset: { x: number; y: number }) => {
     setCities((prev) =>
       prev.map((c) => (c.id === id ? { ...c, offset } : c))
@@ -105,10 +120,6 @@ export function useCityData() {
     );
   };
 
-  const selectAll = () => {
-    setCities((prev) => prev.map((c) => ({ ...c, visible: true })));
-  };
-
   const clearAll = () => {
     setCities((prev) => prev.map((c) => ({ ...c, visible: false })));
   };
@@ -119,9 +130,9 @@ export function useCityData() {
     error,
     warning,
     toggleCity,
+    toggleRegion,
     setOffset,
     resetOffsets,
-    selectAll,
     clearAll,
   };
 }
