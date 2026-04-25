@@ -40,8 +40,12 @@ const cities = [
   { id: 'xian',        name: "Xi'an",       nameZh: '西安',   country: 'China',       region: 'china',         lat: 34.3416,  lon: 108.9398 },
 
   // China expansion
-  { id: 'guangzhou',   name: 'Guangzhou',   nameZh: '广州',   country: 'China',       region: 'china',         lat: 23.1291,  lon: 113.2644 },
-  { id: 'shenzhen',    name: 'Shenzhen',    nameZh: '深圳',   country: 'China',       region: 'china',         lat: 22.5431,  lon: 114.0579 },
+  // Guangzhou and Shenzhen sit inside the same Pearl River Delta night-lights blob
+  // (one ~10,700 km² polygon spanning Foshan→GZ→Dongguan→SZ→HK border). Without a
+  // clip, both match the entire PRD. clipBbox crops the matched polygon to each
+  // city's urban-core rectangle [minLat, maxLat, minLon, maxLon].
+  { id: 'guangzhou',   name: 'Guangzhou',   nameZh: '广州',   country: 'China',       region: 'china',         lat: 23.1291,  lon: 113.2644, clipBbox: [22.95, 23.55, 113.10, 113.70] },
+  { id: 'shenzhen',    name: 'Shenzhen',    nameZh: '深圳',   country: 'China',       region: 'china',         lat: 22.5431,  lon: 114.0579, clipBbox: [22.43, 22.86, 113.75, 114.65] },
   { id: 'chengdu',     name: 'Chengdu',     nameZh: '成都',   country: 'China',       region: 'china',         lat: 30.6595,  lon: 104.0657 },
   { id: 'hangzhou',    name: 'Hangzhou',    nameZh: '杭州',   country: 'China',       region: 'china',         lat: 30.2741,  lon: 120.1551 },
   { id: 'chongqing',   name: 'Chongqing',   nameZh: '重庆',   country: 'China',       region: 'china',         lat: 29.5630,  lon: 106.5516 },
@@ -153,6 +157,66 @@ function simplifyRing(ring, targetPoints = 400) {
   return out;
 }
 
+// Sutherland-Hodgman clip of a closed lon/lat ring against an axis-aligned
+// rectangle. bbox is [minLat, maxLat, minLon, maxLon]. Returns a closed ring
+// (first === last), or [] if the ring lies fully outside.
+function clipRingToBbox(ring, bbox) {
+  const [minLat, maxLat, minLon, maxLon] = bbox;
+  const edges = [
+    { inside: (p) => p[0] >= minLon, isect: (a, b) => isectV(a, b, minLon) },
+    { inside: (p) => p[0] <= maxLon, isect: (a, b) => isectV(a, b, maxLon) },
+    { inside: (p) => p[1] >= minLat, isect: (a, b) => isectH(a, b, minLat) },
+    { inside: (p) => p[1] <= maxLat, isect: (a, b) => isectH(a, b, maxLat) },
+  ];
+  let pts = ring.slice(0, ring.length - 1);
+  for (const { inside, isect } of edges) {
+    if (pts.length === 0) break;
+    const next = [];
+    for (let i = 0; i < pts.length; i++) {
+      const cur = pts[i];
+      const prev = pts[(i + pts.length - 1) % pts.length];
+      const curIn = inside(cur);
+      const prevIn = inside(prev);
+      if (curIn) {
+        if (!prevIn) next.push(isect(prev, cur));
+        next.push(cur);
+      } else if (prevIn) {
+        next.push(isect(prev, cur));
+      }
+    }
+    pts = next;
+  }
+  if (pts.length < 3) return [];
+  pts.push(pts[0]);
+  return pts;
+}
+
+function isectV(a, b, x) {
+  const t = (x - a[0]) / (b[0] - a[0]);
+  return [x, a[1] + t * (b[1] - a[1])];
+}
+function isectH(a, b, y) {
+  const t = (y - a[1]) / (b[1] - a[1]);
+  return [a[0] + t * (b[0] - a[0]), y];
+}
+
+// Equirectangular planar area of a closed lon/lat ring, in km². Used after
+// clipping (where Natural Earth's per-feature area_sqkm is no longer accurate).
+function ringAreaKm2(ring) {
+  if (ring.length < 4) return 0;
+  let meanLat = 0;
+  for (let i = 0; i < ring.length - 1; i++) meanLat += ring[i][1];
+  meanLat /= ring.length - 1;
+  const cosLat = Math.cos((meanLat * Math.PI) / 180);
+  let twiceArea = 0;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [x1, y1] = ring[i];
+    const [x2, y2] = ring[i + 1];
+    twiceArea += x1 * y2 - x2 * y1;
+  }
+  return (Math.abs(twiceArea) / 2) * 110.574 * 111.32 * cosLat;
+}
+
 // Iterate each outer ring of a feature's geometry. Returns
 // [{ ring, areaKm2 }] where areaKm2 is the feature's reported area
 // split evenly across its sub-polygons (Natural Earth gives a single
@@ -231,8 +295,27 @@ for (const city of cities) {
     continue;
   }
 
+  // For cities sharing a continuous urban blob with neighbors (Pearl River
+  // Delta), crop each ring to the city's clipBbox and recompute area from
+  // the clipped polygon (Natural Earth's per-feature area_sqkm no longer
+  // applies once we've cut the ring).
+  const cropped = city.clipBbox
+    ? collected
+        .map((c) => {
+          const ring = clipRingToBbox(c.ring, city.clipBbox);
+          return ring.length === 0 ? null : { ring, areaKm2: ringAreaKm2(ring) };
+        })
+        .filter(Boolean)
+    : collected;
+
+  if (cropped.length === 0) {
+    console.warn(`  ✗ ${city.name}: clipBbox excluded all matched polygons`);
+    missing.push(city.id);
+    continue;
+  }
+
   // Simplify each ring to keep the file small.
-  const simplified = collected.map((c) => ({
+  const simplified = cropped.map((c) => ({
     ring: simplifyRing(c.ring, 300),
     areaKm2: c.areaKm2,
   }));
