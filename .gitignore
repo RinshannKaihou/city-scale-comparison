@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Generated data / build artifacts
+cache/
+ne_10m_*
+.venv/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
