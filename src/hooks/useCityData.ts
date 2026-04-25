@@ -19,7 +19,7 @@ export function useCityData() {
   };
 
   useEffect(() => {
-    fetch('/data/cities.json')
+    fetch(`${import.meta.env.BASE_URL}data/cities.json`)
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load city data');
         return res.json();
@@ -57,7 +57,7 @@ export function useCityData() {
     Promise.all(
       toLoad.map(async (city) => {
         try {
-          const res = await fetch(`/data/roads-stitched/${city.id}.json`);
+          const res = await fetch(`${import.meta.env.BASE_URL}data/roads-stitched/${city.id}.json`);
           if (!res.ok) return { id: city.id, roads: null };
           const roads = await res.json() as number[][][];
           return { id: city.id, roads };
