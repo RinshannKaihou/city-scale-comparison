@@ -36,7 +36,7 @@ const BBOX_PAD_KM = 2;
 // is ~44,000 km² — a single Overpass query chokes on that volume of
 // tertiary+secondary ways. Tiling keeps each request under the server's
 // effective memory/time budget.
-const MAX_TILE_KM2 = 12_000;
+const MAX_TILE_KM2 = 8_000;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

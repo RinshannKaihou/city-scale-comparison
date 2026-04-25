@@ -26,7 +26,7 @@ The app reads `public/data/cities.json` (metadata + geometry) and lazy-fetches `
 ## Gotchas
 
 - **Fetcher skips cities with non-empty per-city files.** To force a refetch, delete the file: `rm public/data/roads/<id>.json`. No `--force` flag. See [fetch-roads-overpass.js `readExistingRoads`](scripts/fetch-roads-overpass.js).
-- **Auto-tiling triggers at `MAX_TILE_KM2 = 12000`** — only Tokyo hits this (44,400 km² bbox splits 2×2). Tiles dedupe by OSM way ID, not coordinates.
+- **Auto-tiling triggers at `MAX_TILE_KM2 = 8000`** — Tokyo, Osaka, Bangkok, Tehran, Washington, Boston, Chicago, Houston, Madrid, Rome, Barcelona, Milan all split 2×2 or 3×3. The threshold was lowered from 12000 after Overpass started returning truncated JSON for ~10k km² single-tile queries. Tiles dedupe by OSM way ID, not coordinates.
 - **Stitcher's quantization is 1 cm** (`QUANT = 1e7`). OSM node coords match exactly at shared endpoints; there's no tolerance fallback. If neighboring cities' ways don't stitch, check whether the upstream fetch includes the connecting way — it often doesn't at bbox boundaries.
 - **`scripts/extract-roads.js` is deprecated.** The old pipeline routed roads through `cities.json`; the new fetcher writes per-city files directly. Don't re-add extract-roads to the flow; it will overwrite good per-city data with empty arrays.
 - **Scale is computed from admin bbox in [MapCanvas.tsx:40](src/components/MapCanvas.tsx:40)**, which now reads urban-polygon bbox (renamed from admin but we kept the variable name). Linear dimensions track `sqrt(areaKm2)` — this is what makes cross-city size comparisons meaningful.
