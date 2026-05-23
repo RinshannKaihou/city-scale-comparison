@@ -11,7 +11,14 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const dragStartRef = useRef({ x: 0, y: 0, offsetX: 0, offsetY: 0 });
+  const dragStartRef = useRef({
+    x: 0,
+    y: 0,
+    offsetX: 0,
+    offsetY: 0,
+    pointerId: -1,
+    target: null as Element | null,
+  });
 
   // Measure container size
   useEffect(() => {
@@ -72,17 +79,25 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
     return `1 px ≈ ${(metersPerPixel / 1000).toFixed(1)} km`;
   }, [globalScale]);
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent, cityId: string) => {
+  // Pointer Events handle mouse, touch, and pen with one API. We capture the
+  // pointer on pointerdown so a finger straying off the city hit-area keeps
+  // dragging. touch-action: none on the SVG (below) tells the browser not to
+  // interpret the gesture as a pan/zoom.
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent, cityId: string) => {
       e.preventDefault();
       const city = cities.find((c) => c.id === cityId);
       if (!city) return;
+      const target = e.currentTarget;
+      target.setPointerCapture(e.pointerId);
       setDraggingId(cityId);
       dragStartRef.current = {
         x: e.clientX,
         y: e.clientY,
         offsetX: city.offset.x,
         offsetY: city.offset.y,
+        pointerId: e.pointerId,
+        target,
       };
     },
     [cities]
@@ -91,7 +106,8 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
   useEffect(() => {
     if (!draggingId) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
+      if (e.pointerId !== dragStartRef.current.pointerId) return;
       const dx = e.clientX - dragStartRef.current.x;
       const dy = e.clientY - dragStartRef.current.y;
       onOffsetChange(draggingId, {
@@ -100,15 +116,22 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
       });
     };
 
-    const handleMouseUp = () => {
+    const handlePointerEnd = (e: PointerEvent) => {
+      if (e.pointerId !== dragStartRef.current.pointerId) return;
+      const { target, pointerId } = dragStartRef.current;
+      if (target && target.hasPointerCapture(pointerId)) {
+        target.releasePointerCapture(pointerId);
+      }
       setDraggingId(null);
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerEnd);
+    window.addEventListener('pointercancel', handlePointerEnd);
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerEnd);
+      window.removeEventListener('pointercancel', handlePointerEnd);
     };
   }, [draggingId, onOffsetChange]);
 
@@ -125,7 +148,12 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
 
   return (
     <div ref={containerRef} className="relative w-full h-full overflow-hidden bg-white">
-      <svg width={size.width} height={size.height} className="block">
+      <svg
+        width={size.width}
+        height={size.height}
+        className="block"
+        style={{ touchAction: 'none' }}
+      >
         {/* Background grid */}
         <g opacity={0.15}>
           {gridLinesX.map((x) => (
@@ -181,7 +209,7 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
               key={city.id}
               city={city}
               globalScale={globalScale}
-              onMouseDown={handleMouseDown}
+              onPointerDown={handlePointerDown}
               isDragging={draggingId === city.id}
             />
           ))}
@@ -224,6 +252,21 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
       {visibleCities.length > 0 && !draggingId && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 text-xs text-black/25 font-mono pointer-events-none">
           Drag city outlines to reposition • All cities are at equal scale
+        </div>
+      )}
+
+      {/* Empty state */}
+      {visibleCities.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="text-center max-w-sm px-6">
+            <div className="text-neutral-400 text-sm mb-2">
+              选择左侧城市开始对比
+            </div>
+            <div className="text-neutral-300 text-xs font-mono leading-relaxed">
+              Open the sidebar and toggle cities to overlap them at equal scale.
+              <br />Drag any city outline to align with another.
+            </div>
+          </div>
         </div>
       )}
     </div>

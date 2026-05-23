@@ -5,7 +5,7 @@ import type { CityViewModel } from '@/types/city';
 interface CityMapProps {
   city: CityViewModel;
   globalScale: number;
-  onMouseDown: (e: React.MouseEvent, cityId: string) => void;
+  onPointerDown: (e: React.PointerEvent, cityId: string) => void;
   isDragging: boolean;
 }
 
@@ -58,7 +58,7 @@ function buildRoadPath(roads: number[][][], transformer: Transformer, minPx: num
   return parts.join(' ');
 }
 
-export function CityMap({ city, globalScale, onMouseDown, isDragging }: CityMapProps) {
+export function CityMap({ city, globalScale, onPointerDown, isDragging }: CityMapProps) {
   const rawId = useId();
   const clipId = `clip-${rawId.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 
@@ -113,8 +113,8 @@ export function CityMap({ city, globalScale, onMouseDown, isDragging }: CityMapP
   return (
     <g
       transform={`translate(${city.offset.x}, ${city.offset.y})`}
-      style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
-      onMouseDown={(e) => onMouseDown(e, city.id)}
+      style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+      onPointerDown={(e) => onPointerDown(e, city.id)}
     >
       <defs>
         <clipPath id={clipId}>

@@ -17,7 +17,7 @@ Grouped into **6 regions** in the sidebar:
 | Region | Count | Notable |
 |---|---|---|
 | China (中国) | 16 | Beijing, Shanghai, Shenzhen, Hong Kong, Chongqing, Tianjin … |
-| Asia (亚洲, incl. Oceania) | 18 | Tokyo, Seoul, Mumbai, Jakarta, Delhi, Sydney, Auckland … |
+| APAC (亚太, incl. Oceania) | 18 | Tokyo, Seoul, Mumbai, Jakarta, Delhi, Sydney, Auckland … |
 | Europe (欧洲) | 15 | London, Paris, Moscow, Istanbul, Berlin, Madrid, Rome … |
 | North America (北美) | 12 | New York, LA, Chicago, Mexico City, Toronto, Houston … |
 | South America (南美) | 9 | São Paulo, Buenos Aires, Rio, Lima, Santiago … |

@@ -3,11 +3,16 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "typecheck": "tsc -b --noEmit",
     "preview": "vite preview",
+    "clean": "rm -rf dist .parcel-cache node_modules/.vite",
     "deploy": "pnpm build && gh-pages -d dist"
   },
   "dependencies": {
