@@ -4,7 +4,7 @@ import { REGION_ORDER } from '@/lib/regions';
 import { RegionAccordion } from './RegionAccordion';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MapPin, RotateCcw, Square } from 'lucide-react';
+import { MapPin, RotateCcw, Search, Square, X } from 'lucide-react';
 
 interface CitySelectorProps {
   cities: CityViewModel[];
@@ -25,18 +25,44 @@ export function CitySelector({
 }: CitySelectorProps) {
   const visibleCount = cities.filter((c) => c.visible).length;
 
+  const [query, setQuery] = useState('');
+  const normalizedQuery = query.trim().toLowerCase();
+
+  // Filter cities by name (en/zh), country, or id. Empty query = no filter.
+  const filteredCities = useMemo(() => {
+    if (!normalizedQuery) return cities;
+    return cities.filter((c) =>
+      c.name.toLowerCase().includes(normalizedQuery) ||
+      c.nameZh.toLowerCase().includes(normalizedQuery) ||
+      c.country.toLowerCase().includes(normalizedQuery) ||
+      c.id.toLowerCase().includes(normalizedQuery)
+    );
+  }, [cities, normalizedQuery]);
+
   const byRegion = useMemo(() => {
     const map = new Map<Region, CityViewModel[]>();
     for (const r of REGION_ORDER) map.set(r, []);
-    for (const c of cities) map.get(c.region)?.push(c);
+    for (const c of filteredCities) map.get(c.region)?.push(c);
     return map;
-  }, [cities]);
+  }, [filteredCities]);
 
   const [expanded, setExpanded] = useState<Set<Region>>(() => {
     const s = new Set<Region>();
     for (const c of cities) if (c.visible) s.add(c.region);
     return s;
   });
+
+  // When a query is active, force-expand any region with matches so results
+  // are visible without manual expansion. Don't mutate `expanded` itself —
+  // we want the user's manual collapse state to return when query is cleared.
+  const effectiveExpanded = useMemo(() => {
+    if (!normalizedQuery) return expanded;
+    const next = new Set(expanded);
+    for (const [region, list] of byRegion) {
+      if (list.length > 0) next.add(region);
+    }
+    return next;
+  }, [expanded, normalizedQuery, byRegion]);
 
   const toggleExpanded = (r: Region) => {
     setExpanded((prev) => {
@@ -47,7 +73,7 @@ export function CitySelector({
   };
 
   return (
-    <div className="w-72 h-full bg-white border-r border-black/5 flex flex-col">
+    <div className="w-full md:w-72 h-full max-md:max-h-[85vh] bg-white md:border-r border-black/5 flex flex-col">
       <div className="p-4 border-b border-black/5">
         <h1 className="text-lg font-bold text-neutral-900 tracking-tight flex items-center gap-2">
           <MapPin className="w-5 h-5 text-neutral-400" />
@@ -56,6 +82,29 @@ export function CitySelector({
         <p className="text-xs text-neutral-400 mt-1">
           Equal-scale urban area comparison
         </p>
+      </div>
+
+      <div className="px-3 py-2 border-b border-black/5">
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-300 pointer-events-none" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜索 / Search cities"
+            className="w-full pl-7 pr-7 py-1.5 text-xs bg-neutral-50 border border-transparent rounded-md focus:outline-none focus:border-neutral-300 focus:bg-white placeholder:text-neutral-300"
+            aria-label="Search cities"
+          />
+          {query && (
+            <button
+              onClick={() => setQuery('')}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100"
+              aria-label="Clear search"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="px-3 py-2 flex gap-2 border-b border-black/5">
@@ -99,13 +148,19 @@ export function CitySelector({
                 key={region}
                 region={region}
                 cities={regionCities}
-                expanded={expanded.has(region)}
+                expanded={effectiveExpanded.has(region)}
                 onToggleExpanded={() => toggleExpanded(region)}
                 onToggleCity={onToggleCity}
                 onToggleRegion={onToggleRegion}
               />
             );
           })}
+          {normalizedQuery && filteredCities.length === 0 && (
+            <div className="px-4 py-6 text-center text-xs text-neutral-400">
+              没有匹配的城市
+              <div className="text-[10px] text-neutral-300 mt-1">No matching cities</div>
+            </div>
+          )}
         </div>
       </ScrollArea>
 

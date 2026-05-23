@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import type { CityViewModel, CityData, Region } from '@/types/city';
 import { getCityColor } from '@/lib/colors';
+import { encode as encodeUrl, decode as decodeUrl } from '@/lib/url-state';
 
 const VISIBLE_CAP = 12;
 
@@ -11,6 +13,10 @@ export function useCityData() {
   const [warning, setWarning] = useState<string | null>(null);
   const warningTimerRef = useRef<number | null>(null);
   const loadedRef = useRef<Set<string>>(new Set());
+  // Guards URL writes during initial mount. Only flips true after the
+  // first cities-state has been derived from fetch + URL hash.
+  const hydratedRef = useRef(false);
+  const urlWriteTimerRef = useRef<number | null>(null);
 
   const flashWarning = (msg: string) => {
     setWarning(msg);
@@ -30,20 +36,45 @@ export function useCityData() {
           shanghai: { x: -220, y: -160 },
           tokyo: { x: 240, y: -180 },
         };
-        const viewModels: CityViewModel[] = data.map((city, i) => ({
-          ...city,
-          color: getCityColor(i),
-          offset: defaultOffsets[city.id] || { x: 0, y: 0 },
-          visible: i < 3,
-        }));
+        const urlState = decodeUrl(window.location.hash);
+        const urlVisible = urlState ? new Set(urlState.visible) : null;
+
+        const viewModels: CityViewModel[] = data.map((city, i) => {
+          const urlOffset = urlState?.offsets[city.id];
+          return {
+            ...city,
+            color: getCityColor(i),
+            offset: urlOffset ?? defaultOffsets[city.id] ?? { x: 0, y: 0 },
+            visible: urlVisible ? urlVisible.has(city.id) : i < 3,
+          };
+        });
         setCities(viewModels);
         setLoading(false);
+        hydratedRef.current = true;
       })
       .catch((err) => {
         setError(err.message);
         setLoading(false);
       });
   }, []);
+
+  // Write state back to URL (debounced so drag doesn't flood history).
+  // Uses replaceState — no back-button entry per change.
+  useEffect(() => {
+    if (!hydratedRef.current || cities.length === 0) return;
+    if (urlWriteTimerRef.current) window.clearTimeout(urlWriteTimerRef.current);
+    urlWriteTimerRef.current = window.setTimeout(() => {
+      const next = encodeUrl({
+        visible: cities.filter((c) => c.visible).map((c) => c.id),
+        offsets: Object.fromEntries(
+          cities.map((c) => [c.id, c.offset])
+        ),
+      });
+      if (next !== window.location.hash) {
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${next}`);
+      }
+    }, 250);
+  }, [cities]);
 
   // Load roads for visible cities
   useEffect(() => {
@@ -58,10 +89,18 @@ export function useCityData() {
       toLoad.map(async (city) => {
         try {
           const res = await fetch(`${import.meta.env.BASE_URL}data/roads-stitched/${city.id}.json`);
-          if (!res.ok) return { id: city.id, roads: null };
+          if (!res.ok) {
+            toast.error(`无法加载 ${city.nameZh} 路网`, {
+              description: `${city.name} · HTTP ${res.status}`,
+            });
+            return { id: city.id, roads: null };
+          }
           const roads = await res.json() as number[][][];
           return { id: city.id, roads };
-        } catch {
+        } catch (err) {
+          toast.error(`无法加载 ${city.nameZh} 路网`, {
+            description: err instanceof Error ? err.message : String(err),
+          });
           return { id: city.id, roads: null };
         }
       })
