@@ -19,6 +19,11 @@ ne_10m_*
 .parcel-cache/
 *.tsbuildinfo
 
+# Off-repo road data — fetched from data sibling repo at runtime.
+# Run `pnpm fetch-data` to populate locally for offline dev.
+/public/data/roads/
+/public/data/roads-stitched/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

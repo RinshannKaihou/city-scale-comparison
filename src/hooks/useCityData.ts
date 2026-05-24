@@ -85,10 +85,17 @@ export function useCityData() {
 
     for (const c of toLoad) loadedRef.current.add(c.id);
 
+    // Roads are fetched from a configurable base URL so the 250 MB of
+    // road JSON can live off-repo. Default points at the data repo's
+    // GitHub Pages site; override with VITE_ROADS_BASE_URL or .env.local
+    // to fetch from a local public/data/roads-stitched/ instead.
+    const roadsBase = import.meta.env.VITE_ROADS_BASE_URL
+      ?? `${import.meta.env.BASE_URL}data/roads-stitched/`;
+
     Promise.all(
       toLoad.map(async (city) => {
         try {
-          const res = await fetch(`${import.meta.env.BASE_URL}data/roads-stitched/${city.id}.json`);
+          const res = await fetch(`${roadsBase}${city.id}.json`);
           if (!res.ok) {
             toast.error(`无法加载 ${city.nameZh} 路网`, {
               description: `${city.name} · HTTP ${res.status}`,

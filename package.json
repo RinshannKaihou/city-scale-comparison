@@ -13,6 +13,7 @@
     "typecheck": "tsc -b --noEmit",
     "preview": "vite preview",
     "clean": "rm -rf dist .parcel-cache node_modules/.vite",
+    "fetch-data": "node scripts/fetch-data.js",
     "deploy": "pnpm build && gh-pages -d dist"
   },
   "dependencies": {
