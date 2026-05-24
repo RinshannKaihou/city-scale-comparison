@@ -14,7 +14,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist .parcel-cache node_modules/.vite",
     "fetch-data": "node scripts/fetch-data.js",
-    "deploy": "pnpm build && gh-pages -d dist"
+    "deploy": "echo 'Production deploys run via GitHub Actions on push to main. See .github/workflows/deploy.yml; use the Actions tab to re-trigger manually.' && exit 1"
   },
   "dependencies": {
     "@radix-ui/react-scroll-area": "^1.2.10",
@@ -41,7 +41,6 @@
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
-    "gh-pages": "^6.3.0",
     "globals": "^17.4.0",
     "mapshaper": "^0.7.0",
     "postcss": "^8.5.10",
