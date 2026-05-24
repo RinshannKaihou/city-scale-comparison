@@ -1,6 +1,9 @@
 import { useRef, useState, useMemo, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
+import { Download, Image as ImageIcon } from 'lucide-react';
 import type { CityViewModel } from '@/types/city';
 import { CityMap } from './CityMap';
+import { exportPng, exportSvg } from '@/lib/export-svg';
 
 interface MapCanvasProps {
   cities: CityViewModel[];
@@ -9,8 +12,10 @@ interface MapCanvasProps {
 
 export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const dragStartRef = useRef({
     x: 0,
     y: 0,
@@ -135,6 +140,27 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
     };
   }, [draggingId, onOffsetChange]);
 
+  const handleExport = useCallback(
+    async (format: 'png' | 'svg') => {
+      if (!svgRef.current) return;
+      setExporting(true);
+      try {
+        if (format === 'png') {
+          await exportPng(svgRef.current, scaleText);
+        } else {
+          exportSvg(svgRef.current, scaleText);
+        }
+      } catch (err) {
+        toast.error(`Export failed`, {
+          description: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        setExporting(false);
+      }
+    },
+    [scaleText]
+  );
+
   // Grid lines
   const gridSpacing = 100;
   const gridLinesX = Array.from(
@@ -149,6 +175,7 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
   return (
     <div ref={containerRef} className="relative w-full h-full overflow-hidden bg-white">
       <svg
+        ref={svgRef}
         width={size.width}
         height={size.height}
         className="block"
@@ -252,6 +279,32 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
       {visibleCities.length > 0 && !draggingId && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 text-xs text-black/25 font-mono pointer-events-none">
           Drag city outlines to reposition • All cities are at equal scale
+        </div>
+      )}
+
+      {/* Export toolbar */}
+      {visibleCities.length > 0 && (
+        <div className="absolute top-4 right-4 flex gap-1 bg-white/70 border border-black/10 backdrop-blur-sm rounded">
+          <button
+            onClick={() => handleExport('png')}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-700 hover:bg-neutral-100/70 disabled:opacity-50 disabled:cursor-wait rounded-l"
+            aria-label="Export current view as PNG"
+            title="Export as PNG (2× scale)"
+          >
+            <ImageIcon className="w-3 h-3" />
+            PNG
+          </button>
+          <button
+            onClick={() => handleExport('svg')}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-700 hover:bg-neutral-100/70 disabled:opacity-50 disabled:cursor-wait rounded-r border-l border-black/5"
+            aria-label="Export current view as SVG"
+            title="Export as SVG (vector)"
+          >
+            <Download className="w-3 h-3" />
+            SVG
+          </button>
         </div>
       )}
 
