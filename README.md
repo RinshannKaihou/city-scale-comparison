@@ -37,15 +37,24 @@ pnpm dev              # dev server with HMR
 # → http://localhost:5173
 ```
 
+The app reads `public/data/cities.json` once at startup, then **lazy-loads each city's road file only when you toggle it visible** — so opening the sidebar with 79 cities is instant; only what you select is downloaded.
+
+Per-city road JSONs (~250 MB total) are hosted in the sibling repo [`city-scale-comparison-data`](https://github.com/RinshannKaihou/city-scale-comparison-data) and served via GitHub Pages. The default `.env` points there; override with `.env.local` or `VITE_ROADS_BASE_URL` to fetch from somewhere else. See [`docs/DATA-HOSTING.md`](docs/DATA-HOSTING.md).
+
+Optional — for fully offline dev, populate `public/data/roads-stitched/` locally:
+
+```bash
+pnpm fetch-data       # downloads all 79 road JSONs to public/data/
+```
+
 Other scripts:
 
 ```bash
 pnpm build            # production build (tsc -b && vite build) → dist/
 pnpm preview          # serve dist/ locally
+pnpm typecheck        # TypeScript only
 pnpm lint             # ESLint
 ```
-
-The app reads `public/data/cities.json` once at startup, then **lazy-loads each city's road file only when you toggle it visible** — so opening the sidebar with 79 cities is instant; only what you select is downloaded.
 
 ## Using the app
 
@@ -108,9 +117,10 @@ scripts/
   fetch-roads-overpass.js   # Overpass scraping
   stitch-roads.js           # ways → continuous polylines
 public/data/
-  cities.json               # 79 cities, geometry + metadata (~400 KB)
-  roads/<id>.json           # raw fetched roads, per city
-  roads-stitched/<id>.json  # post-stitch polylines, the file the app actually reads
+  cities.json               # 79 cities, geometry + metadata (~1.4 MB)
+  # roads/ and roads-stitched/ are gitignored — pipeline outputs.
+  # Stitched roads are hosted in the sibling repo (city-scale-comparison-data)
+  # and served via GitHub Pages.
 ```
 
 ## Non-obvious conventions
@@ -125,10 +135,9 @@ A few things that look like bugs but aren't:
 
 ## Repository size
 
-`public/data/` is **~525 MB** (264 MB raw roads + 258 MB stitched). The largest single file is `tokyo.json` at 27 MB. The data is committed so the app runs out of the box — no API keys, no separate data download. If repo size becomes an issue, candidates for moving out:
+The app repo is **~20 MB total** — `cities.json` (1.4 MB) ships in `public/data/`, but the 250 MB of per-city road JSONs live in the [`city-scale-comparison-data`](https://github.com/RinshannKaihou/city-scale-comparison-data) sibling repo and are fetched at runtime. Git history was rewritten on 2026-05-23 to strip the road data from all commits (force-push); a safety tag `pre-filter-repo-backup` on origin preserves the pre-rewrite state for ~30 days.
 
-- The `roads/` raw directory — only `roads-stitched/` is read at runtime.
-- Git LFS for files > 10 MB.
+See [`docs/DATA-HOSTING.md`](docs/DATA-HOSTING.md) for how to bump the data version, swap CDNs, or run offline.
 
 ## Credits
 
