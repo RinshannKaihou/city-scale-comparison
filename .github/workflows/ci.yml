@@ -10,6 +10,10 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Read-only: CI verifies the code, it doesn't need to write anything.
+permissions:
+  contents: read
+
 jobs:
   ci:
     runs-on: ubuntu-latest

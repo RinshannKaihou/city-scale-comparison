@@ -34,3 +34,4 @@ ne_10m_*
 *.njsproj
 *.sln
 *.sw?
+.claude/
