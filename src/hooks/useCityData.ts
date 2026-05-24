@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import type { CityViewModel, CityData, Region } from '@/types/city';
+import { z } from 'zod';
+import type { CityViewModel, Region } from '@/types/city';
 import { getCityColor } from '@/lib/colors';
 import { encode as encodeUrl, decode as decodeUrl } from '@/lib/url-state';
+import { CitiesArraySchema, RoadsSchema, formatZodError } from '@/lib/schemas';
 
 const VISIBLE_CAP = 12;
 
@@ -30,7 +32,12 @@ export function useCityData() {
         if (!res.ok) throw new Error('Failed to load city data');
         return res.json();
       })
-      .then((data: CityData[]) => {
+      .then((raw) => {
+        // Validate the bundled cities.json against the Zod schema. If
+        // someone ships a malformed cities.json from the data pipeline,
+        // we want a clear error here, not undefined-render downstream.
+        const data = CitiesArraySchema.parse(raw);
+
         const defaultOffsets: Record<string, { x: number; y: number }> = {
           beijing: { x: 0, y: 0 },
           shanghai: { x: -220, y: -160 },
@@ -53,7 +60,11 @@ export function useCityData() {
         hydratedRef.current = true;
       })
       .catch((err) => {
-        setError(err.message);
+        if (err instanceof z.ZodError) {
+          setError(`cities.json failed validation — ${formatZodError(err)}`);
+        } else {
+          setError(err.message);
+        }
         setLoading(false);
       });
   }, []);
@@ -102,12 +113,18 @@ export function useCityData() {
             });
             return { id: city.id, roads: null };
           }
-          const roads = await res.json() as number[][][];
+          const raw = await res.json();
+          // Validate road shape. Catches malformed JSON from the data
+          // repo (e.g. someone uploads a non-array) before render.
+          const roads = RoadsSchema.parse(raw);
           return { id: city.id, roads };
         } catch (err) {
-          toast.error(`无法加载 ${city.nameZh} 路网`, {
-            description: err instanceof Error ? err.message : String(err),
-          });
+          const desc = err instanceof z.ZodError
+            ? `${city.name} · 数据格式错误: ${formatZodError(err)}`
+            : err instanceof Error
+              ? `${city.name} · ${err.message}`
+              : `${city.name} · ${String(err)}`;
+          toast.error(`无法加载 ${city.nameZh} 路网`, { description: desc });
           return { id: city.id, roads: null };
         }
       })
