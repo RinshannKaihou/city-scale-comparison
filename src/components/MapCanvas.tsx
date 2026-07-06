@@ -2,8 +2,16 @@ import { useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Download, Image as ImageIcon } from 'lucide-react';
 import type { CityViewModel } from '@/types/city';
-import { CityMap } from './CityMap';
-import { exportPng, exportSvg } from '@/lib/export-svg';
+import {
+  buildRoadsGeom,
+  computeGlobalScale,
+  drawScene,
+  getCityGeom,
+  hitTest,
+  type GeomCache,
+  type Layout,
+} from '@/lib/map-render';
+import { exportPng, exportSvg } from '@/lib/export-map';
 
 interface MapCanvasProps {
   cities: CityViewModel[];
@@ -12,7 +20,13 @@ interface MapCanvasProps {
 
 export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Projected/LOD geometry per city, keyed by id. Persists across renders and
+  // visibility toggles so re-showing a city is instant. Never in React state —
+  // this is the whole point of the canvas rewrite.
+  const cacheRef = useRef<GeomCache>(new Map());
+  const rafRef = useRef<number | null>(null);
+  const buildRafRef = useRef<number | null>(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -22,10 +36,27 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
     offsetX: 0,
     offsetY: 0,
     pointerId: -1,
-    target: null as Element | null,
   });
 
-  // Measure container size
+  const visibleCities = useMemo(() => cities.filter((c) => c.visible), [cities]);
+
+  const globalScale = useMemo(
+    () => computeGlobalScale(cities, size.width, size.height),
+    [cities, size],
+  );
+
+  const layout: Layout = useMemo(
+    () => ({ width: size.width, height: size.height, globalScale }),
+    [size, globalScale],
+  );
+
+  // Latest state mirrored into refs so the self-scheduling paint/build loops
+  // (rAF callbacks) always read current values without re-subscribing. Synced
+  // inside the effect below (mutating refs during render is disallowed).
+  const citiesRef = useRef(cities);
+  const layoutRef = useRef(layout);
+
+  // Measure container size.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -41,77 +72,149 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
     return () => observer.disconnect();
   }, []);
 
-  const visibleCities = useMemo(
-    () => cities.filter((c) => c.visible),
-    [cities]
+  // Stable imperative paint — reads refs, so it never goes stale.
+  const paint = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { width, height } = layoutRef.current;
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.round(width * dpr));
+    const h = Math.max(1, Math.round(height * dpr));
+    if (canvas.width !== w) canvas.width = w;
+    if (canvas.height !== h) canvas.height = h;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawScene(ctx, citiesRef.current, layoutRef.current, cacheRef.current, {
+      background: '#ffffff',
+    });
+  }, []);
+
+  // Coalesce all redraw triggers (toggle, drag, roads build, resize) into one
+  // rAF per frame. A hidden tab pauses rAF, so paint synchronously in that
+  // case — otherwise the canvas would go stale (or never paint) while
+  // backgrounded (also true of the headless preview).
+  const schedulerPaint = useCallback(() => {
+    if (rafRef.current != null) return;
+    if (typeof requestAnimationFrame === 'undefined' || document.hidden) {
+      paint();
+      return;
+    }
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      paint();
+    });
+  }, [paint]);
+
+  // Sync refs, repaint, and drive the road-build pump whenever state changes.
+  // Refs are set here (not during render) so the async rAF callbacks read the
+  // latest values. The pump builds the heavy road geometry for ONE pending
+  // city per frame, then repaints and reschedules — spreading a bulk
+  // region-toggle (16+ cities) across frames instead of freezing the main
+  // thread in a single multi-second build. A hidden tab pauses rAF, so it
+  // falls back to building synchronously (a backgrounded tab / the headless
+  // preview never sees a frozen UI anyway).
+  useEffect(() => {
+    citiesRef.current = cities;
+    layoutRef.current = layout;
+    schedulerPaint();
+
+    // Self-recursive local pump; reads refs, so it stays current even if a
+    // prior effect's pump is still in flight.
+    const pump = () => {
+      buildRafRef.current = null;
+      const cache = cacheRef.current;
+      const scale = layoutRef.current.globalScale;
+      for (const city of citiesRef.current) {
+        if (!city.visible || !city.roads) continue;
+        const geom = getCityGeom(cache, city, scale);
+        if (geom.roads) continue;
+        geom.roads = buildRoadsGeom(
+          city.roads,
+          city.bbox,
+          scale,
+          geom.boundary.minSegPx,
+        );
+        paint();
+        if (typeof requestAnimationFrame === 'undefined' || document.hidden) {
+          pump();
+        } else {
+          buildRafRef.current = requestAnimationFrame(pump);
+        }
+        return;
+      }
+    };
+
+    // Kick the pump only if one isn't already scheduled.
+    if (buildRafRef.current == null) pump();
+  }, [cities, layout, schedulerPaint, paint]);
+
+  useEffect(
+    () => () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      if (buildRafRef.current != null) cancelAnimationFrame(buildRafRef.current);
+    },
+    [],
   );
 
-  // Scale by the admin polygon's bounding box. This is a proxy for the
-  // city's *stated* area (areaKm2 in the legend) — bbox linear dimensions
-  // track sqrt(areaKm2) closely across the dataset. Using road-network
-  // extent here collapses all cities into ≈ the same size because the
-  // Overpass fetch radius (10–20 km) is fixed per city, not proportional
-  // to urban size.
-  const globalScale = useMemo(() => {
-    if (visibleCities.length === 0) return 0.01;
-
-    let maxHalfWidth = 0;
-    let maxHalfHeight = 0;
-
-    for (const city of visibleCities) {
-      const centerLat = (city.bbox[0] + city.bbox[1]) / 2;
-      const metersPerDegLon = 111320 * Math.cos(centerLat * (Math.PI / 180));
-      const metersPerDegLat = 110540;
-      const widthMeters = (city.bbox[3] - city.bbox[2]) * metersPerDegLon;
-      const heightMeters = (city.bbox[1] - city.bbox[0]) * metersPerDegLat;
-      if (widthMeters / 2 > maxHalfWidth) maxHalfWidth = widthMeters / 2;
-      if (heightMeters / 2 > maxHalfHeight) maxHalfHeight = heightMeters / 2;
-    }
-
-    const padding = 0.75;
-    const scaleX = (size.width * padding) / (maxHalfWidth * 2 || 1);
-    const scaleY = (size.height * padding) / (maxHalfHeight * 2 || 1);
-    return Math.min(scaleX, scaleY);
-  }, [visibleCities, size]);
-
-  // Scale indicator text
   const scaleText = useMemo(() => {
     if (globalScale <= 0) return '';
     const metersPerPixel = 1 / globalScale;
-    if (metersPerPixel < 1000) {
-      return `1 px ≈ ${Math.round(metersPerPixel)} m`;
-    }
+    if (metersPerPixel < 1000) return `1 px ≈ ${Math.round(metersPerPixel)} m`;
     return `1 px ≈ ${(metersPerPixel / 1000).toFixed(1)} km`;
   }, [globalScale]);
 
-  // Pointer Events handle mouse, touch, and pen with one API. We capture the
-  // pointer on pointerdown so a finger straying off the city hit-area keeps
-  // dragging. touch-action: none on the SVG (below) tells the browser not to
-  // interpret the gesture as a pan/zoom.
+  const pointerPos = (e: React.PointerEvent | PointerEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
   const handlePointerDown = useCallback(
-    (e: React.PointerEvent, cityId: string) => {
-      e.preventDefault();
-      const city = cities.find((c) => c.id === cityId);
+    (e: React.PointerEvent) => {
+      const { x, y } = pointerPos(e);
+      const id = hitTest(cities, layout, cacheRef.current, x, y);
+      if (!id) return;
+      const city = cities.find((c) => c.id === id);
       if (!city) return;
-      const target = e.currentTarget;
-      target.setPointerCapture(e.pointerId);
-      setDraggingId(cityId);
+      e.preventDefault();
+      // setPointerCapture can throw for a pointer the browser no longer
+      // considers active; a failed capture shouldn't abort the drag.
+      try {
+        canvasRef.current?.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      setDraggingId(id);
       dragStartRef.current = {
         x: e.clientX,
         y: e.clientY,
         offsetX: city.offset.x,
         offsetY: city.offset.y,
         pointerId: e.pointerId,
-        target,
       };
     },
-    [cities]
+    [cities, layout],
+  );
+
+  // Hover cursor feedback when not dragging.
+  const handlePointerMoveHover = useCallback(
+    (e: React.PointerEvent) => {
+      if (draggingId) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const { x, y } = pointerPos(e);
+      const id = hitTest(cities, layout, cacheRef.current, x, y);
+      canvas.style.cursor = id ? 'grab' : 'default';
+    },
+    [cities, layout, draggingId],
   );
 
   useEffect(() => {
     if (!draggingId) return;
 
-    const handlePointerMove = (e: PointerEvent) => {
+    const handleMove = (e: PointerEvent) => {
       if (e.pointerId !== dragStartRef.current.pointerId) return;
       const dx = e.clientX - dragStartRef.current.x;
       const dy = e.clientY - dragStartRef.current.y;
@@ -120,131 +223,62 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
         y: dragStartRef.current.offsetY + dy,
       });
     };
-
-    const handlePointerEnd = (e: PointerEvent) => {
+    const handleEnd = (e: PointerEvent) => {
       if (e.pointerId !== dragStartRef.current.pointerId) return;
-      const { target, pointerId } = dragStartRef.current;
-      if (target && target.hasPointerCapture(pointerId)) {
-        target.releasePointerCapture(pointerId);
-      }
+      canvasRef.current?.releasePointerCapture?.(e.pointerId);
       setDraggingId(null);
     };
 
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerEnd);
-    window.addEventListener('pointercancel', handlePointerEnd);
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleEnd);
+    window.addEventListener('pointercancel', handleEnd);
     return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerEnd);
-      window.removeEventListener('pointercancel', handlePointerEnd);
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleEnd);
+      window.removeEventListener('pointercancel', handleEnd);
     };
   }, [draggingId, onOffsetChange]);
 
   const handleExport = useCallback(
     async (format: 'png' | 'svg') => {
-      if (!svgRef.current) return;
       setExporting(true);
       try {
         if (format === 'png') {
-          await exportPng(svgRef.current, scaleText);
+          await exportPng(cities, layout, cacheRef.current, scaleText);
         } else {
-          exportSvg(svgRef.current, scaleText);
+          exportSvg(cities, layout, cacheRef.current, scaleText);
         }
       } catch (err) {
-        toast.error(`Export failed`, {
+        toast.error('Export failed', {
           description: err instanceof Error ? err.message : String(err),
         });
       } finally {
         setExporting(false);
       }
     },
-    [scaleText]
-  );
-
-  // Grid lines
-  const gridSpacing = 100;
-  const gridLinesX = Array.from(
-    { length: Math.ceil(size.width / gridSpacing) + 1 },
-    (_, i) => i * gridSpacing
-  );
-  const gridLinesY = Array.from(
-    { length: Math.ceil(size.height / gridSpacing) + 1 },
-    (_, i) => i * gridSpacing
+    [cities, layout, scaleText],
   );
 
   return (
-    <div ref={containerRef} className="relative w-full h-full overflow-hidden bg-white">
-      <svg
-        ref={svgRef}
-        width={size.width}
-        height={size.height}
+    <div
+      ref={containerRef}
+      className="relative w-full h-full overflow-hidden bg-white"
+    >
+      <canvas
+        ref={canvasRef}
         className="block"
-        style={{ touchAction: 'none' }}
-      >
-        {/* Background grid */}
-        <g opacity={0.15}>
-          {gridLinesX.map((x) => (
-            <line
-              key={`vx-${x}`}
-              x1={x}
-              y1={0}
-              x2={x}
-              y2={size.height}
-              stroke="#000000"
-              strokeWidth={0.5}
-            />
-          ))}
-          {gridLinesY.map((y) => (
-            <line
-              key={`hy-${y}`}
-              x1={0}
-              y1={y}
-              x2={size.width}
-              y2={y}
-              stroke="#000000"
-              strokeWidth={0.5}
-            />
-          ))}
-        </g>
-
-        {/* Center crosshair */}
-        <g opacity={0.12}>
-          <line
-            x1={size.width / 2}
-            y1={0}
-            x2={size.width / 2}
-            y2={size.height}
-            stroke="#000000"
-            strokeWidth={0.5}
-            strokeDasharray="4 4"
-          />
-          <line
-            x1={0}
-            y1={size.height / 2}
-            x2={size.width}
-            y2={size.height / 2}
-            stroke="#000000"
-            strokeWidth={0.5}
-            strokeDasharray="4 4"
-          />
-        </g>
-
-        {/* City maps */}
-        <g transform={`translate(${size.width / 2}, ${size.height / 2})`}>
-          {visibleCities.map((city) => (
-            <CityMap
-              key={city.id}
-              city={city}
-              globalScale={globalScale}
-              onPointerDown={handlePointerDown}
-              isDragging={draggingId === city.id}
-            />
-          ))}
-        </g>
-      </svg>
+        style={{
+          width: size.width,
+          height: size.height,
+          touchAction: 'none',
+          cursor: draggingId ? 'grabbing' : 'default',
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMoveHover}
+      />
 
       {/* Scale indicator */}
-      {scaleText && (
+      {scaleText && visibleCities.length > 0 && (
         <div className="absolute bottom-4 left-4 text-xs text-black/40 font-mono bg-white/70 border border-black/10 px-3 py-1.5 rounded backdrop-blur-sm">
           {scaleText}
         </div>
@@ -317,7 +351,8 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
             </div>
             <div className="text-neutral-300 text-xs font-mono leading-relaxed">
               Open the sidebar and toggle cities to overlap them at equal scale.
-              <br />Drag any city outline to align with another.
+              <br />
+              Drag any city outline to align with another.
             </div>
           </div>
         </div>

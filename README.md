@@ -26,7 +26,7 @@ Grouped into **6 regions** in the sidebar:
 ## Stack
 
 - **Frontend** — React 19 + TypeScript + Vite + Tailwind CSS, with shadcn/ui primitives.
-- **Rendering** — d3-geo for projection math, raw SVG for the overlap canvas.
+- **Rendering** — a single **HTML Canvas 2D**. Geometry is projected once per zoom and cached as `Path2D` (a drag never re-projects), roads are decimated to the current zoom (LOD) and built one city per animation frame. A metro's road network is up to ~1.1M vertices — SVG/DOM can't hold that; the canvas draws it in ~0.2 ms/frame.
 - **Data** — Natural Earth `ne_10m_urban_areas` for boundaries, Overpass API (OSM) for roads.
 
 ## Quick start
@@ -75,7 +75,7 @@ node scripts/stitch-roads.js           # roads/      → public/data/roads-stitc
 
 What each does:
 
-- **extract-urban-areas** — for each city seed (lat/lon + region), collects every Natural Earth urban polygon within 0.4° (~44 km) and unions them. This stitches back together polygons that Natural Earth split at water (NYC's Hudson, Sydney's harbour, Hong Kong's bays).
+- **extract-urban-areas** — matches each city seed to a consistent built-up footprint. Every Natural Earth polygon is attributed to its **nearest seed**; a city grows from its home polygon by **adjacency flood-fill** across small gaps (≤ 8 km edge-to-edge, up to 45 km from the seed), so it reunites water-split fragments (NYC's harbour, Sydney's, Hong Kong's islands) without swallowing a neighbouring metro. Blobs that contain more than one seeded city (Pearl River Delta, Keihanshin, the Randstad…) are split along the **perpendicular bisectors** between their seeds; neighbouring cities not in the display list are added as hidden `display: false` shadow seeds to make that split happen. No fixed radius, no manual crop rectangles.
 - **fetch-roads-overpass** — bbox-scoped Overpass queries for `motorway/trunk/primary/secondary/tertiary`. Three-mirror rotation, exponential backoff. **Auto-tiles** any bbox > 8,000 km² (Tokyo's 44k km² Kanto blob splits into a 3×3 grid). Skip-if-exists makes the script resumable across rate-limit interruptions. Supports `--region=<id>` for phased fetching.
 - **stitch-roads** — angle-based stroke stitcher. OSM ways are fragmented at every intersection; this merges adjacent ways along straight continuations (≤30° turn) so roads look like roads in the render, not like ladder rungs. ~25–35% polyline-count reduction on average.
 
@@ -95,7 +95,7 @@ What each does:
    node scripts/stitch-roads.js
    ```
 
-3. If the extractor reports `✗ <name>: no urban polygon found within 0.4°`, your seed lat/lon is too far from any Natural Earth polygon. Either move the seed closer to the urban core or check the metro really has a Natural Earth night-lights footprint (some smaller cities don't).
+3. If the extractor reports the city as `✗ ... UNMATCHED`, your seed lat/lon isn't inside (or within ~5 km of) any Natural Earth polygon. Either move the seed closer to the urban core or check the metro really has a Natural Earth night-lights footprint (some smaller cities don't).
 
 ## Layout
 
@@ -104,16 +104,17 @@ src/
   components/
     CitySelector.tsx        # sidebar: region accordions + warning banner
     RegionAccordion.tsx     # one collapsible region group
-    CityMap.tsx             # per-city SVG group (boundary, clipped roads, label)
-    MapCanvas.tsx           # global scale, drag handling, grid/legend chrome
-  hooks/
-    useCityData.ts          # loads cities.json, lazy-fetches roads, owns visibility
+    MapCanvas.tsx           # <canvas> + rAF paint, road-build pump, drag hit-testing, chrome
   lib/
+    map-render.ts           # projection, LOD, Path2D cache, drawScene, hitTest (off React render)
+    export-map.ts           # PNG (2× re-render) + SVG (rebuilt d-strings) export
     regions.ts              # REGION_ORDER + bilingual labels
     colors.ts               # per-city color palette
-  types/city.ts             # CityData / CityViewModel
+  hooks/
+    useCityData.ts          # loads cities.json, lazy-fetches roads, owns visibility
+  types/city.ts             # CityData / CityViewModel / CityGeometry
 scripts/
-  extract-urban-areas.js    # seeds + Natural Earth → cities.json
+  extract-urban-areas.js    # seeds + Natural Earth → cities.json (nearest-seed flood-fill + bisector partition)
   fetch-roads-overpass.js   # Overpass scraping
   stitch-roads.js           # ways → continuous polylines
 public/data/
@@ -129,7 +130,7 @@ A few things that look like bugs but aren't:
 
 - **`bbox` is `[minLat, maxLat, minLon, maxLon]`** — not the GeoJSON `[W, S, E, N]` convention. Everything in this repo uses this order; don't swap.
 - **Geometry is `Polygon | MultiPolygon`.** Cities split by water (NYC, Hong Kong) come out as MultiPolygon; single-piece cities as Polygon. Consumers must handle both.
-- **`areaKm2` is the area of the drawn polygon**, not an external "official" city size — it's summed from Natural Earth's `area_sqkm` over all matched features. Intentional: linear dimensions track √areaKm2, which is what makes the equal-scale comparison meaningful.
+- **`areaKm2` is the area of the drawn polygon**, not an external "official" city size — it's recomputed (equirectangular planar area) from the final matched-and-partitioned geometry. Intentional: linear dimensions track √areaKm2, which is what makes the equal-scale comparison meaningful.
 - **`MAX_TILE_KM2 = 8000`** in the fetcher. Originally 12,000; lowered after Overpass started returning truncated JSON for ~10k km² single-tile queries. Most large metros now split 2×2 or 3×3.
 - **Stitcher quantization is 1 cm** (`QUANT = 1e7`). OSM node coordinates match exactly at shared endpoints — there's no tolerance fallback. If neighboring cities' ways don't stitch, the upstream fetch missed the connecting way, usually at a bbox boundary.
 

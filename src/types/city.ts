@@ -6,13 +6,26 @@ export type Region =
   | 'south-america'
   | 'africa';
 
+// The GeoJSON geometry subset we actually use, defined locally so the type
+// doesn't depend on the @types/geojson UMD global (which was only present
+// transitively via @types/d3-geo — fragile).
+export interface PolygonGeometry {
+  type: 'Polygon';
+  coordinates: number[][][];
+}
+export interface MultiPolygonGeometry {
+  type: 'MultiPolygon';
+  coordinates: number[][][][];
+}
+export type CityGeometry = PolygonGeometry | MultiPolygonGeometry;
+
 export interface CityData {
   id: string;
   name: string;
   nameZh: string;
   country: string;
   region: Region;
-  geojson: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+  geojson: CityGeometry;
   bbox: [number, number, number, number];
   areaKm2: number;
   rivers?: number[][][];

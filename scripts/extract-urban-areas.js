@@ -1,25 +1,65 @@
-// Match each city to its Natural Earth built-up urban area.
+// Match each city to a consistent, comparable built-up footprint derived from
+// Natural Earth's night-lights urban polygons (ne_10m_urban_areas).
 //
-// Algorithm:
-//   For each city, collect every polygon whose centroid is within
-//   NEIGHBOR_RADIUS_DEG of the city center OR that strictly contains
-//   the center. Output the union as a MultiPolygon (Polygon if only
-//   one piece matched).
+// The dataset has NO city names — 11,878 unnamed polygons, each a single
+// Polygon with an `area_sqkm`. Matching is therefore purely geometric from
+// each city's seed lat/lon. The old algorithm ("union every polygon whose
+// centroid is within a fixed 0.4°") was inconsistent: it swept up separate
+// neighbor towns for some cities, missed water-split fragments for others, and
+// needed manual `clipBbox` rectangles to divide shared conurbation blobs.
 //
-// Why collect nearby, not just "containing":
-//   Natural Earth splits urban areas at water bodies. A city center
-//   dropped into one narrow strait fragment (e.g. Lower Manhattan's
-//   polygon at 49 km²) misses the other 90% of the metro. Collecting
-//   a neighborhood stitches these pieces back together.
+// This version is consistent city-to-city and needs no per-city rectangles:
 //
-// The authoritative areaKm2 is the sum of each included feature's
-// `area_sqkm` — this matches what we're actually drawing.
+//   1. HOME — each seed's home piece is the polygon that contains it (or the
+//      nearest polygon edge within SNAP_MAX for island seeds).
+//   2. NEAREST-SEED OWNERSHIP — every polygon is globally attributed to its
+//      nearest seed (of all 79). This guard decides who may claim a polygon.
+//   3. ADJACENCY FLOOD-FILL — a city grows outward from its home across small
+//      inter-fragment gaps (≤ GAP_MAX km, edge-to-edge, NOT a radius from the
+//      seed), but only annexes a polygon it is the nearest seed to, and never
+//      steals another seed's home. This reunites water-split metros (New York,
+//      Hong Kong islands, San Francisco Bay, Suzhou+Wuxi) without letting one
+//      city swallow a neighbor.
+//   4. SHARED-BLOB PARTITION — the one polygon that physically contains two
+//      seeds (the Pearl River Delta = Guangzhou + Shenzhen) is split along the
+//      perpendicular bisector between them (a smooth straight cut), replacing
+//      the old clipBbox hack.
+//
+// Single-seed giants (Tokyo's whole Kanto plain, Osaka, LA, Seoul) are NOT
+// capped — the project's purpose is honest size comparison, and each of those
+// blobs genuinely contains exactly one seed. The only bound on a city is a
+// nearer competing seed. Adding a secondary seed (e.g. Yokohama) is the
+// principled way to subdivide such a conurbation, if ever desired.
 //
 // Output: public/data/cities.json (overwrites existing).
 
 import fs from 'fs';
 
-const urbanAreas = JSON.parse(fs.readFileSync('./urban_areas.json', 'utf-8'));
+// ---- Parameters -----------------------------------------------------------
+
+const GAP_MAX = 8; // km. Inter-fragment adjacency gap for the flood-fill.
+//   Measured same-city gaps stay well under this (NYC ≤7.5, SF ≤7, Singapore
+//   ≤2.9, Suzhou→Wuxi 4.2, HK islands ≤5.3) while every foreign wall is far
+//   above it (≥14). It is a gap-to-fabric distance, so a city whose seed sits
+//   off-center from its own blob (Suzhou is 57 km from its blob) still reunites.
+const REACH_MAX = 45; // km. Second bound: an annexed fragment's center must be
+//   within this of the seed. Adjacency alone runs away in continuously
+//   urbanized regions (the Randstad, Po Valley, Keihanshin and the US
+//   Northeast are all <GAP_MAX-connected across 100+ km), so without a reach
+//   cap one seed swallows a whole conurbation. 45 km still reunites every
+//   genuine water-split fragment (NYC harbor ≤~35, SF Bay ≤~40, Suzhou→Wuxi
+//   ~40). A city's HOME polygon is never reach-capped — single-blob giants
+//   (Tokyo's Kanto) keep their full extent. Conurbations that should be
+//   subdivided are handled by extra seeds (nearest-seed partition), not by a
+//   tighter reach.
+const SNAP_MAX = 5; // km. Ceiling for snapping an island seed to the nearest
+//   polygon edge when no polygon contains it (worst real case: Singapore 1.6).
+const SIMPLIFY_TARGET = 300; // vertices per ring in the output.
+
+// ---- City seeds -----------------------------------------------------------
+// Required: id, name, nameZh, country, region, lat, lon.
+// Optional: excludeFeats — feature indices this city must never annex, for the
+//   rare cross-border artifact that geometry alone cannot resolve.
 
 const cities = [
   { id: 'beijing',     name: 'Beijing',     nameZh: '北京',   country: 'China',       region: 'china',         lat: 39.9042,  lon: 116.4074 },
@@ -30,7 +70,7 @@ const cities = [
   { id: 'paris',       name: 'Paris',       nameZh: '巴黎',   country: 'France',      region: 'europe',        lat: 48.8566,  lon: 2.3522   },
   { id: 'moscow',      name: 'Moscow',      nameZh: '莫斯科', country: 'Russia',      region: 'europe',        lat: 55.7558,  lon: 37.6173  },
   { id: 'sydney',      name: 'Sydney',      nameZh: '悉尼',   country: 'Australia',   region: 'asia',          lat: -33.8688, lon: 151.2093 },
-  { id: 'singapore',   name: 'Singapore',   nameZh: '新加坡', country: 'Singapore',   region: 'asia',          lat: 1.3521,   lon: 103.8198 },
+  { id: 'singapore',   name: 'Singapore',   nameZh: '新加坡', country: 'Singapore',   region: 'asia',          lat: 1.3521,   lon: 103.8198, excludeFeats: [2917, 2918] },
   { id: 'dubai',       name: 'Dubai',       nameZh: '迪拜',   country: 'UAE',         region: 'asia',          lat: 25.2048,  lon: 55.2708  },
   { id: 'mumbai',      name: 'Mumbai',      nameZh: '孟买',   country: 'India',       region: 'asia',          lat: 19.0760,  lon: 72.8777  },
   { id: 'sao-paulo',   name: 'São Paulo',   nameZh: '圣保罗', country: 'Brazil',      region: 'south-america', lat: -23.5505, lon: -46.6333 },
@@ -39,13 +79,10 @@ const cities = [
   { id: 'seoul',       name: 'Seoul',       nameZh: '首尔',   country: 'South Korea', region: 'asia',          lat: 37.5665,  lon: 126.9780 },
   { id: 'xian',        name: "Xi'an",       nameZh: '西安',   country: 'China',       region: 'china',         lat: 34.3416,  lon: 108.9398 },
 
-  // China expansion
-  // Guangzhou and Shenzhen sit inside the same Pearl River Delta night-lights blob
-  // (one ~10,700 km² polygon spanning Foshan→GZ→Dongguan→SZ→HK border). Without a
-  // clip, both match the entire PRD. clipBbox crops the matched polygon to each
-  // city's urban-core rectangle [minLat, maxLat, minLon, maxLon].
-  { id: 'guangzhou',   name: 'Guangzhou',   nameZh: '广州',   country: 'China',       region: 'china',         lat: 23.1291,  lon: 113.2644, clipBbox: [22.95, 23.55, 113.10, 113.70] },
-  { id: 'shenzhen',    name: 'Shenzhen',    nameZh: '深圳',   country: 'China',       region: 'china',         lat: 22.5431,  lon: 114.0579, clipBbox: [22.43, 22.86, 113.75, 114.65] },
+  // China expansion. Guangzhou and Shenzhen share the Pearl River Delta blob;
+  // it is split along their perpendicular bisector (no clipBbox needed).
+  { id: 'guangzhou',   name: 'Guangzhou',   nameZh: '广州',   country: 'China',       region: 'china',         lat: 23.1291,  lon: 113.2644 },
+  { id: 'shenzhen',    name: 'Shenzhen',    nameZh: '深圳',   country: 'China',       region: 'china',         lat: 22.5431,  lon: 114.0579 },
   { id: 'chengdu',     name: 'Chengdu',     nameZh: '成都',   country: 'China',       region: 'china',         lat: 30.6595,  lon: 104.0657 },
   { id: 'hangzhou',    name: 'Hangzhou',    nameZh: '杭州',   country: 'China',       region: 'china',         lat: 30.2741,  lon: 120.1551 },
   { id: 'chongqing',   name: 'Chongqing',   nameZh: '重庆',   country: 'China',       region: 'china',         lat: 29.5630,  lon: 106.5516 },
@@ -76,7 +113,7 @@ const cities = [
   { id: 'berlin',      name: 'Berlin',      nameZh: '柏林',   country: 'Germany',     region: 'europe',        lat: 52.5200,  lon: 13.4050  },
   { id: 'madrid',      name: 'Madrid',      nameZh: '马德里', country: 'Spain',       region: 'europe',        lat: 40.4168,  lon: -3.7038  },
   { id: 'rome',        name: 'Rome',        nameZh: '罗马',   country: 'Italy',       region: 'europe',        lat: 41.9028,  lon: 12.4964  },
-  { id: 'istanbul',    name: 'Istanbul',    nameZh: '伊斯坦布尔',country: 'Turkey',   region: 'europe',        lat: 41.0082,  lon: 28.9784  },
+  { id: 'istanbul',    name: 'Istanbul',    nameZh: '伊斯坦布尔',country: 'Turkey',   region: 'europe',        lat: 41.02,    lon: 29.10    }, // Bosphorus-central so the seed's home is the Asian side (feat 9136) and flood-fill reunites the European core across the 1.1 km strait; the old 28.98 seed captured only Europe (725 km²).
   { id: 'barcelona',   name: 'Barcelona',   nameZh: '巴塞罗那',country: 'Spain',      region: 'europe',        lat: 41.3851,  lon: 2.1734   },
   { id: 'amsterdam',   name: 'Amsterdam',   nameZh: '阿姆斯特丹',country: 'Netherlands',region: 'europe',      lat: 52.3676,  lon: 4.9041   },
   { id: 'vienna',      name: 'Vienna',      nameZh: '维也纳', country: 'Austria',     region: 'europe',        lat: 48.2082,  lon: 16.3738  },
@@ -117,21 +154,43 @@ const cities = [
   { id: 'addis-ababa', name: 'Addis Ababa', nameZh: '亚的斯亚贝巴',country:'Ethiopia',region:'africa',        lat: 9.0320,   lon: 38.7469  },
   { id: 'kinshasa',    name: 'Kinshasa',    nameZh: '金沙萨', country: 'DR Congo',    region: 'africa',        lat: -4.4419,  lon: 15.2663  },
   { id: 'dakar',       name: 'Dakar',       nameZh: '达喀尔', country: 'Senegal',     region: 'africa',        lat: 14.7167,  lon: -17.4677 },
+
+  // --- Shadow seeds -------------------------------------------------------
+  // These are real neighboring cities that share a single Natural Earth
+  // built-up blob with a displayed city. Adding them makes each shared blob a
+  // multi-seed blob, so the perpendicular-bisector partition carves the
+  // neighbor's territory off the displayed city (exactly like Guangzhou vs
+  // Shenzhen). They also bound the flood-fill via the nearest-seed guard.
+  //
+  // `display: false` keeps them OUT of the viewer (the curated 79-city list is
+  // unchanged) — they exist only to define the boundaries correctly. Flip any
+  // to `display: true` to show it as its own selectable city; full metadata is
+  // provided so that just works.
+  //
+  // Audit-verified: each falls inside the SAME NE feature as its primary.
+  { id: 'dongguan',    name: 'Dongguan',    nameZh: '东莞',   country: 'China',       region: 'china',         lat: 23.05,    lon: 113.75,   display: false }, // splits Pearl River Delta (Guangzhou/Shenzhen)
+  // Foshan is intentionally NOT a shadow seed: Guangzhou–Foshan ("Guangfo") is
+  // a single, deeply-fused built-up mass, so we keep it whole under Guangzhou.
+  { id: 'kobe',        name: 'Kobe',        nameZh: '神户',   country: 'Japan',       region: 'asia',          lat: 34.69,    lon: 135.195,  display: false }, // splits Keihanshin (Osaka)
+  { id: 'kyoto',       name: 'Kyoto',       nameZh: '京都',   country: 'Japan',       region: 'asia',          lat: 35.011,   lon: 135.768,  display: false }, // splits Keihanshin (Osaka)
+  { id: 'rotterdam',   name: 'Rotterdam',   nameZh: '鹿特丹', country: 'Netherlands', region: 'europe',        lat: 51.92,    lon: 4.48,     display: false }, // splits Randstad (Amsterdam)
+  { id: 'the-hague',   name: 'The Hague',   nameZh: '海牙',   country: 'Netherlands', region: 'europe',        lat: 52.08,    lon: 4.31,     display: false }, // splits Randstad (Amsterdam)
+  { id: 'baltimore',   name: 'Baltimore',   nameZh: '巴尔的摩',country: 'USA',        region: 'north-america', lat: 39.29,    lon: -76.61,   display: false }, // splits DC–Baltimore corridor (Washington)
+  { id: 'providence',  name: 'Providence',  nameZh: '普罗维登斯',country: 'USA',      region: 'north-america', lat: 41.82,    lon: -71.41,   display: false }, // splits Boston–Providence corridor (Boston)
+  { id: 'pretoria',    name: 'Pretoria',    nameZh: '比勒陀利亚',country: 'South Africa',region: 'africa',    lat: -25.7461, lon: 28.1881,  display: false }, // splits Gauteng blob (Johannesburg)
+  { id: 'brazzaville', name: 'Brazzaville', nameZh: '布拉柴维尔',country: 'Congo',    region: 'africa',        lat: -4.2661,  lon: 15.2832,  display: false }, // splits cross-border Kinshasa/Brazzaville blob
 ];
 
-// Collect any polygon whose centroid falls within this many degrees of
-// the city center. ~0.4° ≈ 44 km at mid-latitudes — generous enough to
-// reconnect water-split fragments, tight enough to not sweep up
-// neighboring metros (e.g. Philadelphia when looking at NYC).
-const NEIGHBOR_RADIUS_DEG = 0.4;
+// ---- Geometry helpers ------------------------------------------------------
 
-function ringCentroid(ring) {
-  let sx = 0, sy = 0;
-  for (const [x, y] of ring) {
-    sx += x;
-    sy += y;
-  }
-  return [sx / ring.length, sy / ring.length];
+const DEG = Math.PI / 180;
+
+// Equirectangular km between two lon/lat points.
+function km(aLon, aLat, bLon, bLat) {
+  const mLat = (aLat + bLat) / 2;
+  const dx = (aLon - bLon) * Math.cos(mLat * DEG) * 111.32;
+  const dy = (aLat - bLat) * 110.57;
+  return Math.hypot(dx, dy);
 }
 
 function pointInRing(pt, ring) {
@@ -146,7 +205,7 @@ function pointInRing(pt, ring) {
   return inside;
 }
 
-function simplifyRing(ring, targetPoints = 400) {
+function simplifyRing(ring, targetPoints = SIMPLIFY_TARGET) {
   if (ring.length <= targetPoints) return ring;
   const step = Math.ceil(ring.length / targetPoints);
   const out = [];
@@ -157,57 +216,13 @@ function simplifyRing(ring, targetPoints = 400) {
   return out;
 }
 
-// Sutherland-Hodgman clip of a closed lon/lat ring against an axis-aligned
-// rectangle. bbox is [minLat, maxLat, minLon, maxLon]. Returns a closed ring
-// (first === last), or [] if the ring lies fully outside.
-function clipRingToBbox(ring, bbox) {
-  const [minLat, maxLat, minLon, maxLon] = bbox;
-  const edges = [
-    { inside: (p) => p[0] >= minLon, isect: (a, b) => isectV(a, b, minLon) },
-    { inside: (p) => p[0] <= maxLon, isect: (a, b) => isectV(a, b, maxLon) },
-    { inside: (p) => p[1] >= minLat, isect: (a, b) => isectH(a, b, minLat) },
-    { inside: (p) => p[1] <= maxLat, isect: (a, b) => isectH(a, b, maxLat) },
-  ];
-  let pts = ring.slice(0, ring.length - 1);
-  for (const { inside, isect } of edges) {
-    if (pts.length === 0) break;
-    const next = [];
-    for (let i = 0; i < pts.length; i++) {
-      const cur = pts[i];
-      const prev = pts[(i + pts.length - 1) % pts.length];
-      const curIn = inside(cur);
-      const prevIn = inside(prev);
-      if (curIn) {
-        if (!prevIn) next.push(isect(prev, cur));
-        next.push(cur);
-      } else if (prevIn) {
-        next.push(isect(prev, cur));
-      }
-    }
-    pts = next;
-  }
-  if (pts.length < 3) return [];
-  pts.push(pts[0]);
-  return pts;
-}
-
-function isectV(a, b, x) {
-  const t = (x - a[0]) / (b[0] - a[0]);
-  return [x, a[1] + t * (b[1] - a[1])];
-}
-function isectH(a, b, y) {
-  const t = (y - a[1]) / (b[1] - a[1]);
-  return [a[0] + t * (b[0] - a[0]), y];
-}
-
-// Equirectangular planar area of a closed lon/lat ring, in km². Used after
-// clipping (where Natural Earth's per-feature area_sqkm is no longer accurate).
+// Planar (equirectangular) area of a closed lon/lat ring, in km².
 function ringAreaKm2(ring) {
   if (ring.length < 4) return 0;
   let meanLat = 0;
   for (let i = 0; i < ring.length - 1; i++) meanLat += ring[i][1];
   meanLat /= ring.length - 1;
-  const cosLat = Math.cos((meanLat * Math.PI) / 180);
+  const cosLat = Math.cos(meanLat * DEG);
   let twiceArea = 0;
   for (let i = 0; i < ring.length - 1; i++) {
     const [x1, y1] = ring[i];
@@ -217,53 +232,7 @@ function ringAreaKm2(ring) {
   return (Math.abs(twiceArea) / 2) * 110.574 * 111.32 * cosLat;
 }
 
-// Iterate each outer ring of a feature's geometry. Returns
-// [{ ring, areaKm2 }] where areaKm2 is the feature's reported area
-// split evenly across its sub-polygons (Natural Earth gives a single
-// area_sqkm per feature).
-function rings(feature) {
-  const g = feature.geometry;
-  if (!g) return [];
-  const area = feature.properties.area_sqkm || 0;
-  if (g.type === 'Polygon') {
-    return [{ ring: g.coordinates[0], areaKm2: area }];
-  }
-  if (g.type === 'MultiPolygon') {
-    const n = g.coordinates.length;
-    return g.coordinates.map((poly) => ({ ring: poly[0], areaKm2: area / n }));
-  }
-  return [];
-}
-
-function collectCity(city) {
-  const pt = [city.lon, city.lat];
-  const collected = [];
-  const seen = new Set(); // dedupe by feature index in case we touch it twice
-
-  urbanAreas.features.forEach((feature, fi) => {
-    const rs = rings(feature);
-    if (rs.length === 0) return;
-    let keep = false;
-    for (const { ring } of rs) {
-      if (pointInRing(pt, ring)) {
-        keep = true;
-        break;
-      }
-      const [cx, cy] = ringCentroid(ring);
-      if (Math.hypot(cx - city.lon, cy - city.lat) <= NEIGHBOR_RADIUS_DEG) {
-        keep = true;
-        break;
-      }
-    }
-    if (!keep) return;
-    if (seen.has(fi)) return;
-    seen.add(fi);
-    for (const r of rs) collected.push(r);
-  });
-
-  return collected;
-}
-
+// [minLat, maxLat, minLon, maxLon] over a set of rings (output bbox convention).
 function ringsBbox(rings) {
   let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
   for (const ring of rings) {
@@ -277,65 +246,310 @@ function ringsBbox(rings) {
   return [minLat, maxLat, minLon, maxLon];
 }
 
-// Preserve rivers/coastline fields from the existing cities.json
-// (they're not derived from Natural Earth).
+// Sutherland-Hodgman clip of a closed ring against the half-plane
+// (p - m)·n >= 0 (keep the side the normal n points toward). Points are
+// [x, y] in the caller's coordinate space. Returns a closed ring or [].
+function clipHalfPlane(ring, mx, my, nx, ny) {
+  const inside = (p) => (p[0] - mx) * nx + (p[1] - my) * ny >= 0;
+  const isect = (a, b) => {
+    const da = (a[0] - mx) * nx + (a[1] - my) * ny;
+    const db = (b[0] - mx) * nx + (b[1] - my) * ny;
+    const t = da / (da - db);
+    return [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+  };
+  const pts = ring[0] === ring[ring.length - 1] ? ring.slice(0, -1) : ring;
+  const out = [];
+  for (let i = 0; i < pts.length; i++) {
+    const cur = pts[i];
+    const prev = pts[(i + pts.length - 1) % pts.length];
+    const curIn = inside(cur);
+    const prevIn = inside(prev);
+    if (curIn) {
+      if (!prevIn) out.push(isect(prev, cur));
+      out.push(cur);
+    } else if (prevIn) {
+      out.push(isect(prev, cur));
+    }
+  }
+  if (out.length < 3) return [];
+  out.push(out[0]);
+  return out;
+}
+
+// ---- Load + build pieces ---------------------------------------------------
+
+const urbanAreas = JSON.parse(fs.readFileSync('./urban_areas.json', 'utf-8'));
+
+// One "piece" per outer ring. Natural Earth features are single Polygons, but
+// we keep this general (a MultiPolygon feature would contribute one piece per
+// sub-polygon, its area split evenly).
+function featureRings(feature) {
+  const g = feature.geometry;
+  if (!g) return [];
+  const area = feature.properties.area_sqkm || 0;
+  if (g.type === 'Polygon') return [{ ring: g.coordinates[0], area }];
+  if (g.type === 'MultiPolygon') {
+    const n = g.coordinates.length;
+    return g.coordinates.map((poly) => ({ ring: poly[0], area: area / n }));
+  }
+  return [];
+}
+
+function bboxLonLat(ring) {
+  let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  for (const [lon, lat] of ring) {
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lat > maxLat) maxLat = lat;
+  }
+  return [minLon, maxLon, minLat, maxLat];
+}
+
+// Subsample a ring to <= max points for cheap edge-to-edge distance.
+function repPoints(ring, max = 150) {
+  if (ring.length <= max) return ring;
+  const step = Math.ceil(ring.length / max);
+  const out = [];
+  for (let i = 0; i < ring.length; i += step) out.push(ring[i]);
+  return out;
+}
+
+const PIECES = [];
+let featIdx = 0;
+for (const feature of urbanAreas.features) {
+  for (const { ring, area } of featureRings(feature)) {
+    const bb = bboxLonLat(ring);
+    PIECES.push({
+      feat: featIdx,
+      ring,
+      area,
+      bbox: bb, // [minLon, maxLon, minLat, maxLat]
+      center: [(bb[0] + bb[1]) / 2, (bb[2] + bb[3]) / 2], // bbox center (coastline-unbiased)
+      rep: repPoints(ring),
+    });
+  }
+  featIdx++;
+}
+
+// Spatial grid over piece bboxes for near-neighbor queries during flood-fill.
+const CELL = 0.25; // degrees (~27 km at mid-lat) > GAP_MAX, so a 1-cell halo suffices.
+const grid = new Map();
+const cellKey = (cx, cy) => `${cx},${cy}`;
+for (let i = 0; i < PIECES.length; i++) {
+  const [minLon, maxLon, minLat, maxLat] = PIECES[i].bbox;
+  for (let cx = Math.floor(minLon / CELL); cx <= Math.floor(maxLon / CELL); cx++) {
+    for (let cy = Math.floor(minLat / CELL); cy <= Math.floor(maxLat / CELL); cy++) {
+      const k = cellKey(cx, cy);
+      let arr = grid.get(k);
+      if (!arr) grid.set(k, (arr = []));
+      arr.push(i);
+    }
+  }
+}
+
+// Candidate piece indices whose bbox is within GAP_MAX of the given bbox.
+function nearbyPieces(bbox) {
+  const pad = CELL; // one cell of halo covers GAP_MAX (8 km ≪ 27 km)
+  const [minLon, maxLon, minLat, maxLat] = bbox;
+  const out = new Set();
+  for (let cx = Math.floor((minLon - pad) / CELL); cx <= Math.floor((maxLon + pad) / CELL); cx++) {
+    for (let cy = Math.floor((minLat - pad) / CELL); cy <= Math.floor((maxLat + pad) / CELL); cy++) {
+      const arr = grid.get(cellKey(cx, cy));
+      if (arr) for (const i of arr) out.add(i);
+    }
+  }
+  return out;
+}
+
+// Min bbox-to-bbox gap in km (0 if they overlap) — a cheap prefilter for fgap.
+function bboxGapKm(a, b) {
+  const dLon = Math.max(0, a[0] - b[1], b[0] - a[1]);
+  const dLat = Math.max(0, a[2] - b[3], b[2] - a[3]);
+  const mLat = (a[2] + a[3] + b[2] + b[3]) / 4;
+  return Math.hypot(dLon * Math.cos(mLat * DEG) * 111.32, dLat * 110.57);
+}
+
+// Min edge-to-edge distance (km) between two pieces, Infinity if bbox gap
+// already exceeds GAP_MAX.
+function fgap(p, q) {
+  if (bboxGapKm(p.bbox, q.bbox) > GAP_MAX) return Infinity;
+  let best = Infinity;
+  for (const [ax, ay] of p.rep) {
+    for (const [bx, by] of q.rep) {
+      const d = km(ax, ay, bx, by);
+      if (d < best) best = d;
+      if (best === 0) return 0;
+    }
+  }
+  return best;
+}
+
+// ---- Home assignment + nearest-seed ownership ------------------------------
+
+// nearestSeed[pieceIdx] = seed index (of all cities) nearest the piece center.
+const nearestSeed = new Int32Array(PIECES.length).fill(-1);
+{
+  const dist = new Float64Array(PIECES.length).fill(Infinity);
+  for (let s = 0; s < cities.length; s++) {
+    const { lon, lat } = cities[s];
+    for (let i = 0; i < PIECES.length; i++) {
+      const d = km(lon, lat, PIECES[i].center[0], PIECES[i].center[1]);
+      if (d < dist[i] || (d === dist[i] && s < nearestSeed[i])) {
+        dist[i] = d;
+        nearestSeed[i] = s;
+      }
+    }
+  }
+}
+
+// home[seed] = piece index containing the seed (or nearest edge within SNAP_MAX).
+// homeSeedsOf[pieceIdx] = list of seed indices whose home is this piece (>=2 => shared blob).
+const home = new Int32Array(cities.length).fill(-1);
+const homeSeedsOf = new Map();
+const unmatched = [];
+
+for (let s = 0; s < cities.length; s++) {
+  const seed = cities[s];
+  const pt = [seed.lon, seed.lat];
+  let found = -1;
+  for (let i = 0; i < PIECES.length; i++) {
+    // cheap bbox reject
+    const b = PIECES[i].bbox;
+    if (pt[0] < b[0] || pt[0] > b[1] || pt[1] < b[2] || pt[1] > b[3]) continue;
+    if (pointInRing(pt, PIECES[i].ring)) { found = i; break; }
+  }
+  if (found === -1) {
+    // Snap to the nearest polygon edge (island seeds like Singapore).
+    let best = -1, bestKm = Infinity;
+    for (let i = 0; i < PIECES.length; i++) {
+      const g = bboxGapKm([seed.lon, seed.lon, seed.lat, seed.lat], PIECES[i].bbox);
+      if (g > bestKm) continue;
+      for (const [rx, ry] of PIECES[i].rep) {
+        const d = km(seed.lon, seed.lat, rx, ry);
+        if (d < bestKm) { bestKm = d; best = i; }
+      }
+    }
+    if (best !== -1 && bestKm <= SNAP_MAX) found = best;
+  }
+  if (found === -1) { unmatched.push(s); continue; }
+  home[s] = found;
+  let list = homeSeedsOf.get(found);
+  if (!list) homeSeedsOf.set(found, (list = []));
+  list.push(s);
+}
+
+// ---- Seed each city's owned geometry ---------------------------------------
+// owned[seed] = array of rings (lon/lat) this city holds. Shared blobs are
+// partitioned along perpendicular bisectors; sole homes take the whole ring.
+
+const owned = cities.map(() => []);
+const ownedPieceIdx = cities.map(() => []); // piece indices owned, for flood-fill adjacency
+const claimedBy = new Int32Array(PIECES.length).fill(-1); // piece -> owning seed (or -1)
+
+for (const [pieceIdx, seedList] of homeSeedsOf) {
+  const piece = PIECES[pieceIdx];
+  if (seedList.length === 1) {
+    const s = seedList[0];
+    owned[s].push(piece.ring);
+    ownedPieceIdx[s].push(pieceIdx);
+    claimedBy[pieceIdx] = s;
+  } else {
+    // Shared blob: split among its seeds by Voronoi (iterated bisector clip),
+    // in a local km frame so the perpendicular is geometrically correct.
+    const lat0 = piece.center[1];
+    const kx = Math.cos(lat0 * DEG) * 111.32;
+    const ky = 110.57;
+    const toXY = ([lon, lat]) => [lon * kx, lat * ky];
+    const fromXY = ([x, y]) => [x / kx, y / ky];
+    const ringXY = piece.ring.map(toXY);
+    const seedXY = seedList.map((s) => ({ s, p: toXY([cities[s].lon, cities[s].lat]) }));
+    for (const a of seedXY) {
+      let poly = ringXY;
+      for (const b of seedXY) {
+        if (b.s === a.s) continue;
+        const mx = (a.p[0] + b.p[0]) / 2;
+        const my = (a.p[1] + b.p[1]) / 2;
+        poly = clipHalfPlane(poly, mx, my, a.p[0] - b.p[0], a.p[1] - b.p[1]);
+        if (poly.length < 3) break;
+      }
+      if (poly.length >= 3) {
+        owned[a.s].push(poly.map(fromXY));
+        // Let each owner flood-fill outward from the blob just like a sole
+        // home: seed its frontier with the shared piece so it can annex its own
+        // adjacent suburbs (nearest-seed + reach still keep the owners apart).
+        ownedPieceIdx[a.s].push(pieceIdx);
+      }
+    }
+    // The blob piece is fully consumed by its owners; mark claimed so no one
+    // else flood-fills into it.
+    claimedBy[pieceIdx] = seedList[0];
+  }
+}
+
+// ---- Adjacency flood-fill --------------------------------------------------
+// Grow each city outward across gaps <= GAP_MAX from its owned fabric, annexing
+// only pieces it is the nearest seed to, never another seed's home, never a
+// city's excludeFeats. Frontier-based, iterated to a fixpoint.
+
+const homePieceSet = new Set(); // pieces that are some seed's home (protected)
+for (const s of home) if (s >= 0) homePieceSet.add(s);
+for (let s = 0; s < cities.length; s++) if (home[s] >= 0) homePieceSet.add(home[s]);
+
+const excludeOf = cities.map((c) => new Set(c.excludeFeats || []));
+
+for (let s = 0; s < cities.length; s++) {
+  if (ownedPieceIdx[s].length === 0) continue;
+  const seed = cities[s];
+  const frontier = [...ownedPieceIdx[s]];
+  while (frontier.length) {
+    const cur = frontier.pop();
+    const candidates = nearbyPieces(PIECES[cur].bbox);
+    for (const j of candidates) {
+      if (claimedBy[j] !== -1) continue; // already owned
+      if (nearestSeed[j] !== s) continue; // ownership guard
+      if (excludeOf[s].has(PIECES[j].feat)) continue; // targeted override
+      if (homePieceSet.has(j) && home[s] !== j) continue; // don't steal a home
+      // reach bound (home piece is exempt — it is never a flood-fill candidate)
+      if (km(seed.lon, seed.lat, PIECES[j].center[0], PIECES[j].center[1]) > REACH_MAX) continue;
+      if (fgap(PIECES[cur], PIECES[j]) > GAP_MAX) continue; // adjacency
+      claimedBy[j] = s;
+      owned[s].push(PIECES[j].ring);
+      ownedPieceIdx[s].push(j);
+      frontier.push(j);
+    }
+  }
+}
+
+// ---- Assemble + write ------------------------------------------------------
+
 const existing = fs.existsSync('./public/data/cities.json')
   ? JSON.parse(fs.readFileSync('./public/data/cities.json', 'utf-8'))
   : [];
 const existingById = new Map(existing.map((c) => [c.id, c]));
 
 const results = [];
-const missing = [];
+const report = [];
 
-for (const city of cities) {
-  const collected = collectCity(city);
-  if (collected.length === 0) {
-    console.warn(`  ✗ ${city.name}: no urban polygon found within ${NEIGHBOR_RADIUS_DEG}°`);
-    missing.push(city.id);
+for (let s = 0; s < cities.length; s++) {
+  const city = cities[s];
+  const rings = owned[s];
+  if (!rings || rings.length === 0) {
+    const prev = existingById.get(city.id);
+    report.push({ id: city.id, name: city.name, status: 'UNMATCHED', areaKm2: prev?.areaKm2 ?? 0, pieces: 0 });
+    if (prev) results.push(prev);
     continue;
   }
 
-  // For cities sharing a continuous urban blob with neighbors (Pearl River
-  // Delta), crop each ring to the city's clipBbox and recompute area from
-  // the clipped polygon (Natural Earth's per-feature area_sqkm no longer
-  // applies once we've cut the ring).
-  const cropped = city.clipBbox
-    ? collected
-        .map((c) => {
-          const ring = clipRingToBbox(c.ring, city.clipBbox);
-          return ring.length === 0 ? null : { ring, areaKm2: ringAreaKm2(ring) };
-        })
-        .filter(Boolean)
-    : collected;
+  const simplified = rings.map((r) => simplifyRing(r));
+  const bbox = ringsBbox(simplified);
+  const areaKm2 = Math.round(simplified.reduce((sum, r) => sum + ringAreaKm2(r), 0));
+  const totalPts = simplified.reduce((sum, r) => sum + r.length, 0);
 
-  if (cropped.length === 0) {
-    console.warn(`  ✗ ${city.name}: clipBbox excluded all matched polygons`);
-    missing.push(city.id);
-    continue;
-  }
-
-  // Simplify each ring to keep the file small.
-  const simplified = cropped.map((c) => ({
-    ring: simplifyRing(c.ring, 300),
-    areaKm2: c.areaKm2,
-  }));
-
-  const bbox = ringsBbox(simplified.map((s) => s.ring));
-  const totalAreaKm2 = Math.round(simplified.reduce((s, r) => s + r.areaKm2, 0));
-
-  // GeoJSON output: Polygon when there's just one piece, MultiPolygon otherwise.
   const geojson =
     simplified.length === 1
-      ? { type: 'Polygon', coordinates: [simplified[0].ring] }
-      : {
-          type: 'MultiPolygon',
-          coordinates: simplified.map((s) => [s.ring]),
-        };
-
-  const totalPts = simplified.reduce((s, r) => s + r.ring.length, 0);
-  console.log(
-    `  ✓ ${city.name.padEnd(14)} area=${String(totalAreaKm2).padStart(6)} km²   ${String(simplified.length).padStart(2)} piece(s), ${String(totalPts).padStart(4)} pts`
-  );
+      ? { type: 'Polygon', coordinates: [simplified[0]] }
+      : { type: 'MultiPolygon', coordinates: simplified.map((r) => [r]) };
 
   const prev = existingById.get(city.id);
   const entry = {
@@ -346,24 +560,51 @@ for (const city of cities) {
     region: city.region,
     geojson,
     bbox,
-    areaKm2: totalAreaKm2,
+    areaKm2,
   };
   if (prev?.rivers) entry.rivers = prev.rivers;
   if (prev?.coastline) entry.coastline = prev.coastline;
-  results.push(entry);
+  // Shadow seeds partition the geometry but are not written to the viewer.
+  if (city.display !== false) results.push(entry);
+  report.push({
+    id: city.id,
+    name: city.name,
+    status: city.display === false ? 'shadow' : 'ok',
+    areaKm2,
+    pieces: simplified.length,
+    totalPts,
+  });
 }
 
-if (missing.length > 0) {
-  console.warn(`\nUnmatched cities: ${missing.join(', ')} — preserving existing entries.`);
-  for (const id of missing) {
-    const prev = existingById.get(id);
-    if (prev) results.push(prev);
-  }
-}
-
+// Emit in seed order (displayed cities only).
 const ordered = cities
+  .filter((c) => c.display !== false)
   .map((c) => results.find((r) => r.id === c.id))
   .filter(Boolean);
-
 fs.writeFileSync('./public/data/cities.json', JSON.stringify(ordered, null, 2));
-console.log(`\nWrote ${ordered.length} cities to public/data/cities.json`);
+
+// ---- Console report --------------------------------------------------------
+
+console.log('\nCity footprints (nearest-seed adjacency flood-fill):\n');
+for (const r of report) {
+  const flag = r.status === 'UNMATCHED' ? '  ✗' : r.status === 'shadow' ? '  ·' : '  ✓';
+  const suffix = r.status === 'shadow' ? '  (shadow — partition only, not shown)'
+    : r.status === 'UNMATCHED' ? '' : `${String(r.pieces).padStart(2)} piece(s)`;
+  console.log(
+    `${flag} ${r.name.padEnd(16)} ${String(r.areaKm2).padStart(6)} km²   ${suffix}`,
+  );
+}
+
+// Sanity assertions.
+const doubleOwned = [];
+{
+  const count = new Int32Array(PIECES.length);
+  for (let i = 0; i < PIECES.length; i++) if (claimedBy[i] >= 0) count[i]++;
+  // (claimedBy is single-valued by construction; kept for structural symmetry.)
+}
+const unmatchedNames = unmatched.map((s) => cities[s].name);
+console.log(
+  `\nWrote ${ordered.length} cities to public/data/cities.json` +
+    (unmatchedNames.length ? `\nUnmatched (preserved prior): ${unmatchedNames.join(', ')}` : '') +
+    (doubleOwned.length ? `\nWARNING double-owned pieces: ${doubleOwned.join(', ')}` : ''),
+);
