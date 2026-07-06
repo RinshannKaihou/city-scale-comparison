@@ -75,6 +75,9 @@ importers:
       mapshaper:
         specifier: ^0.7.0
         version: 0.7.0(@types/geojson@7946.0.16)
+      polygon-clipping:
+        specifier: ^0.15.7
+        version: 0.15.7
       postcss:
         specifier: ^8.5.10
         version: 8.5.10

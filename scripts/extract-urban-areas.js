@@ -34,6 +34,7 @@
 // Output: public/data/cities.json (overwrites existing).
 
 import fs from 'fs';
+import polygonClipping from 'polygon-clipping';
 
 // ---- Parameters -----------------------------------------------------------
 
@@ -179,6 +180,11 @@ const cities = [
   { id: 'providence',  name: 'Providence',  nameZh: '普罗维登斯',country: 'USA',      region: 'north-america', lat: 41.82,    lon: -71.41,   display: false }, // splits Boston–Providence corridor (Boston)
   { id: 'pretoria',    name: 'Pretoria',    nameZh: '比勒陀利亚',country: 'South Africa',region: 'africa',    lat: -25.7461, lon: 28.1881,  display: false }, // splits Gauteng blob (Johannesburg)
   { id: 'brazzaville', name: 'Brazzaville', nameZh: '布拉柴维尔',country: 'Congo',    region: 'africa',        lat: -4.2661,  lon: 15.2832,  display: false }, // splits cross-border Kinshasa/Brazzaville blob
+  { id: 'tarragona',   name: 'Tarragona',   nameZh: '塔拉戈纳', country: 'Spain',       region: 'europe',        lat: 41.1189,  lon: 1.2445,   display: false }, // splits Camp de Tarragona (with Reus) off the 180 km Catalan coast blob (Barcelona)
+  { id: 'bergamo',     name: 'Bergamo',     nameZh: '贝加莫',   country: 'Italy',       region: 'europe',        lat: 45.6983,  lon: 9.6773,   display: false }, // splits Lombardy blob (Milan)
+  { id: 'brescia',     name: 'Brescia',     nameZh: '布雷西亚', country: 'Italy',       region: 'europe',        lat: 45.5416,  lon: 10.2118,  display: false }, // splits Lombardy blob (Milan)
+  { id: 'karaj',       name: 'Karaj',       nameZh: '卡拉季',   country: 'Iran',        region: 'asia',          lat: 35.84,    lon: 50.9391,  display: false }, // splits Tehran–Karaj–Qazvin desert-overglow corridor (Tehran)
+  { id: 'qazvin',      name: 'Qazvin',      nameZh: '加兹温',   country: 'Iran',        region: 'asia',          lat: 36.2797,  lon: 50.0049,  display: false }, // splits Tehran–Karaj–Qazvin desert-overglow corridor (Tehran)
 ];
 
 // ---- Geometry helpers ------------------------------------------------------
@@ -216,6 +222,45 @@ function simplifyRing(ring, targetPoints = SIMPLIFY_TARGET) {
   return out;
 }
 
+// Proper (interior) crossing test between segments p1p2 and p3p4.
+function segmentsCross(p1, p2, p3, p4) {
+  const d = (p2[0] - p1[0]) * (p4[1] - p3[1]) - (p2[1] - p1[1]) * (p4[0] - p3[0]);
+  if (d === 0) return false;
+  const t = ((p3[0] - p1[0]) * (p4[1] - p3[1]) - (p3[1] - p1[1]) * (p4[0] - p3[0])) / d;
+  const u = ((p3[0] - p1[0]) * (p2[1] - p1[1]) - (p3[1] - p1[1]) * (p2[0] - p1[0])) / d;
+  return t > 1e-9 && t < 1 - 1e-9 && u > 1e-9 && u < 1 - 1e-9;
+}
+
+// Remove self-crossings introduced by the every-Nth decimation above — a
+// coarse step across a jagged boundary can pinch the ring into a small bowtie
+// (Tokyo's Kanto ring shipped four 2-7 km ones). Standard 2-opt uncrossing:
+// when edges (i,i+1) and (j,j+1) cross, reversing the sub-path i+1..j
+// replaces them with two non-crossing edges and strictly shortens the
+// perimeter, so iteration terminates (the pass cap only guards float edge
+// cases). Takes and returns a closed ring.
+function untangleRing(ring) {
+  const pts = ring.slice(0, -1);
+  const n = pts.length;
+  let changed = true;
+  for (let pass = 0; changed && pass < 100; pass++) {
+    changed = false;
+    for (let i = 0; i < n && !changed; i++) {
+      for (let j = i + 2; j < n; j++) {
+        if (i === 0 && j === n - 1) continue;
+        if (segmentsCross(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n])) {
+          for (let a = i + 1, b = j; a < b; a++, b--) {
+            const t = pts[a]; pts[a] = pts[b]; pts[b] = t;
+          }
+          changed = true;
+          break;
+        }
+      }
+    }
+  }
+  pts.push(pts[0]);
+  return pts;
+}
+
 // Planar (equirectangular) area of a closed lon/lat ring, in km².
 function ringAreaKm2(ring) {
   if (ring.length < 4) return 0;
@@ -246,34 +291,28 @@ function ringsBbox(rings) {
   return [minLat, maxLat, minLon, maxLon];
 }
 
-// Sutherland-Hodgman clip of a closed ring against the half-plane
-// (p - m)·n >= 0 (keep the side the normal n points toward). Points are
-// [x, y] in the caller's coordinate space. Returns a closed ring or [].
-function clipHalfPlane(ring, mx, my, nx, ny) {
-  const inside = (p) => (p[0] - mx) * nx + (p[1] - my) * ny >= 0;
-  const isect = (a, b) => {
-    const da = (a[0] - mx) * nx + (a[1] - my) * ny;
-    const db = (b[0] - mx) * nx + (b[1] - my) * ny;
-    const t = da / (da - db);
-    return [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
-  };
-  const pts = ring[0] === ring[ring.length - 1] ? ring.slice(0, -1) : ring;
-  const out = [];
-  for (let i = 0; i < pts.length; i++) {
-    const cur = pts[i];
-    const prev = pts[(i + pts.length - 1) % pts.length];
-    const curIn = inside(cur);
-    const prevIn = inside(prev);
-    if (curIn) {
-      if (!prevIn) out.push(isect(prev, cur));
-      out.push(cur);
-    } else if (prevIn) {
-      out.push(isect(prev, cur));
-    }
-  }
-  if (out.length < 3) return [];
-  out.push(out[0]);
-  return out;
+// Intersect a MultiPolygon (polygon-clipping coordinate form) with the
+// half-plane (p - m)·n >= 0, modelled as a huge rectangle on the kept side.
+// A Sutherland-Hodgman clip is NOT usable here: a concave conurbation blob's
+// Voronoi cell is often disconnected (the bisector crosses the boundary 4-8
+// times), and SH stitches the disjoint lobes together with phantom "bridge"
+// edges along the bisector — the shipped Shenzhen ring once carried a
+// 128 km straight edge across the whole Pearl River Delta plus two
+// self-intersections. The martinez boolean instead returns each lobe as its
+// own polygon. Points are [x, y] in the caller's coordinate space (km).
+function clipHalfPlaneMulti(multi, mx, my, nx, ny) {
+  const len = Math.hypot(nx, ny);
+  const ux = nx / len, uy = ny / len; // unit normal, points into the kept side
+  const dxx = -uy, dyy = ux; // unit direction along the bisector line
+  const R = 1e5; // km — far beyond any blob (largest spans ~200 km)
+  const rect = [[
+    [mx - dxx * R, my - dyy * R],
+    [mx + dxx * R, my + dyy * R],
+    [mx + dxx * R + ux * R, my + dyy * R + uy * R],
+    [mx - dxx * R + ux * R, my - dyy * R + uy * R],
+    [mx - dxx * R, my - dyy * R],
+  ]];
+  return polygonClipping.intersection(multi, [rect]);
 }
 
 // ---- Load + build pieces ---------------------------------------------------
@@ -465,20 +504,28 @@ for (const [pieceIdx, seedList] of homeSeedsOf) {
     const ringXY = piece.ring.map(toXY);
     const seedXY = seedList.map((s) => ({ s, p: toXY([cities[s].lon, cities[s].lat]) }));
     for (const a of seedXY) {
-      let poly = ringXY;
+      let cell = [[ringXY]]; // MultiPolygon: the whole blob, outer ring only
       for (const b of seedXY) {
         if (b.s === a.s) continue;
         const mx = (a.p[0] + b.p[0]) / 2;
         const my = (a.p[1] + b.p[1]) / 2;
-        poly = clipHalfPlane(poly, mx, my, a.p[0] - b.p[0], a.p[1] - b.p[1]);
-        if (poly.length < 3) break;
+        cell = clipHalfPlaneMulti(cell, mx, my, a.p[0] - b.p[0], a.p[1] - b.p[1]);
+        if (cell.length === 0) break;
       }
-      if (poly.length >= 3) {
-        owned[a.s].push(poly.map(fromXY));
+      if (cell.length > 0) {
+        // A half-plane intersection of a hole-free polygon can't create holes,
+        // so each cell polygon is just its outer ring — possibly several
+        // disconnected lobes when the bisector cuts a concave blob repeatedly.
+        // Sub-km² lobes are bisector-grazing noise, not urban fabric — drop.
+        let pushed = false;
+        for (const poly of cell) {
+          const lobe = poly[0].map(fromXY);
+          if (ringAreaKm2(lobe) >= 1) { owned[a.s].push(lobe); pushed = true; }
+        }
         // Let each owner flood-fill outward from the blob just like a sole
         // home: seed its frontier with the shared piece so it can annex its own
         // adjacent suburbs (nearest-seed + reach still keep the owners apart).
-        ownedPieceIdx[a.s].push(pieceIdx);
+        if (pushed) ownedPieceIdx[a.s].push(pieceIdx);
       }
     }
     // The blob piece is fully consumed by its owners; mark claimed so no one
@@ -541,7 +588,7 @@ for (let s = 0; s < cities.length; s++) {
     continue;
   }
 
-  const simplified = rings.map((r) => simplifyRing(r));
+  const simplified = rings.map((r) => untangleRing(simplifyRing(r)));
   const bbox = ringsBbox(simplified);
   const areaKm2 = Math.round(simplified.reduce((sum, r) => sum + ringAreaKm2(r), 0));
   const totalPts = simplified.reduce((sum, r) => sum + r.length, 0);

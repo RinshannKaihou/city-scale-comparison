@@ -106,6 +106,26 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
     });
   }, [paint]);
 
+  // Repaint when devicePixelRatio changes (window dragged to a display with
+  // different scaling). paint() sizes the backing store from dpr, but neither
+  // ResizeObserver (CSS size unchanged) nor any state change fires for this.
+  // The media query matches only the current dpr, so re-subscribe after each
+  // change.
+  useEffect(() => {
+    let mql: MediaQueryList | null = null;
+    function onChange() {
+      schedulerPaint();
+      subscribe();
+    }
+    function subscribe() {
+      mql?.removeEventListener('change', onChange);
+      mql = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+      mql.addEventListener('change', onChange);
+    }
+    subscribe();
+    return () => mql?.removeEventListener('change', onChange);
+  }, [schedulerPaint]);
+
   // Sync refs, repaint, and drive the road-build pump whenever state changes.
   // Refs are set here (not during render) so the async rAF callbacks read the
   // latest values. The pump builds the heavy road geometry for ONE pending
@@ -153,6 +173,12 @@ export function MapCanvas({ cities, onOffsetChange }: MapCanvasProps) {
     () => () => {
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       if (buildRafRef.current != null) cancelAnimationFrame(buildRafRef.current);
+      // Null the refs after cancelling: schedulerPaint and the pump kick guard
+      // on them, and a cancelled rAF never runs the callback that would reset
+      // them — StrictMode's simulated unmount would otherwise wedge both loops
+      // for the rest of the session.
+      rafRef.current = null;
+      buildRafRef.current = null;
     },
     [],
   );

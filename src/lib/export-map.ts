@@ -127,6 +127,9 @@ export function exportSvg(
   for (let x = 0; x <= width; x += 100) grid += `M${x},0V${height}`;
   for (let y = 0; y <= height; y += 100) grid += `M0,${y}H${width}`;
   parts.push(`<path d="${grid}" stroke="#000" stroke-width="0.5" opacity="0.15" fill="none"/>`);
+  parts.push(
+    `<path d="M${cx},0V${height}M0,${cy}H${width}" stroke="#000" stroke-width="0.5" opacity="0.12" stroke-dasharray="4 4" fill="none"/>`,
+  );
 
   for (const city of visible) {
     const geom = ensureRoads(cache, city, globalScale);
