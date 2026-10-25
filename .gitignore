@@ -1,37 +1,10 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
+.DS_Store
+.claude/
+node_modules/
+dist/
+.venv/
 *.local
 
-# Generated data / build artifacts
-cache/
+# Local leftovers from v1 (Natural Earth downloads, fetch caches) — not used by v2
 ne_10m_*
-.venv/
-.parcel-cache/
-*.tsbuildinfo
-
-# Off-repo road data — fetched from data sibling repo at runtime.
-# Run `pnpm fetch-data` to populate locally for offline dev.
-/public/data/roads/
-/public/data/roads-stitched/
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-.claude/
+cache/

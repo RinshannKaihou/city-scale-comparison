@@ -1,0 +1,94 @@
+id,name,name_zh,country,region,lat,lon,display,old_area_km2
+beijing,Beijing,北京,China,china,39.9042,116.4074,True,2762.0
+shanghai,Shanghai,上海,China,china,31.2304,121.4737,True,4027.0
+tokyo,Tokyo,东京,Japan,asia,35.6762,139.6503,True,18894.0
+new-york,New York,纽约,USA,north-america,40.7128,-74.006,True,6591.0
+london,London,伦敦,UK,europe,51.5074,-0.1278,True,3309.0
+paris,Paris,巴黎,France,europe,48.8566,2.3522,True,3315.0
+moscow,Moscow,莫斯科,Russia,europe,55.7558,37.6173,True,2517.0
+sydney,Sydney,悉尼,Australia,asia,-33.8688,151.2093,True,1643.0
+singapore,Singapore,新加坡,Singapore,asia,1.3521,103.8198,True,377.0
+dubai,Dubai,迪拜,UAE,asia,25.2048,55.2708,True,276.0
+mumbai,Mumbai,孟买,India,asia,19.076,72.8777,True,1530.0
+sao-paulo,São Paulo,圣保罗,Brazil,south-america,-23.5505,-46.6333,True,2496.0
+cairo,Cairo,开罗,Egypt,africa,30.0444,31.2357,True,1192.0
+los-angeles,Los Angeles,洛杉矶,USA,north-america,34.0522,-118.2437,True,6633.0
+seoul,Seoul,首尔,South Korea,asia,37.5665,126.978,True,6622.0
+xian,Xi'an,西安,China,china,34.3416,108.9398,True,910.0
+guangzhou,Guangzhou,广州,China,china,23.1291,113.2644,True,5014.0
+shenzhen,Shenzhen,深圳,China,china,22.5431,114.0579,True,3127.0
+chengdu,Chengdu,成都,China,china,30.6595,104.0657,True,654.0
+hangzhou,Hangzhou,杭州,China,china,30.2741,120.1551,True,1680.0
+chongqing,Chongqing,重庆,China,china,29.563,106.5516,True,406.0
+tianjin,Tianjin,天津,China,china,39.0842,117.2009,True,2657.0
+wuhan,Wuhan,武汉,China,china,30.5928,114.3055,True,1063.0
+nanjing,Nanjing,南京,China,china,32.0603,118.7969,True,1214.0
+suzhou,Suzhou,苏州,China,china,31.299,120.5853,True,689.0
+qingdao,Qingdao,青岛,China,china,36.0671,120.3826,True,1607.0
+dalian,Dalian,大连,China,china,38.914,121.6147,True,1176.0
+xiamen,Xiamen,厦门,China,china,24.4798,118.0819,True,415.0
+hong-kong,Hong Kong,香港,China,china,22.3193,114.1694,True,286.0
+osaka,Osaka,大阪,Japan,asia,34.6937,135.5023,True,2723.0
+bangkok,Bangkok,曼谷,Thailand,asia,13.7563,100.5018,True,4563.0
+jakarta,Jakarta,雅加达,Indonesia,asia,-6.2088,106.8456,True,1540.0
+manila,Manila,马尼拉,Philippines,asia,14.5995,120.9842,True,1268.0
+kuala-lumpur,Kuala Lumpur,吉隆坡,Malaysia,asia,3.139,101.6869,True,1094.0
+ho-chi-minh,Ho Chi Minh,胡志明市,Vietnam,asia,10.7769,106.7009,True,696.0
+delhi,Delhi,德里,India,asia,28.6139,77.209,True,2669.0
+karachi,Karachi,卡拉奇,Pakistan,asia,24.8607,67.0011,True,711.0
+tehran,Tehran,德黑兰,Iran,asia,35.6892,51.389,True,2735.0
+taipei,Taipei,台北,Taiwan,asia,25.033,121.5654,True,1925.0
+melbourne,Melbourne,墨尔本,Australia,asia,-37.8136,144.9631,True,1872.0
+auckland,Auckland,奥克兰,New Zealand,asia,-36.8485,174.7633,True,423.0
+berlin,Berlin,柏林,Germany,europe,52.52,13.405,True,1630.0
+madrid,Madrid,马德里,Spain,europe,40.4168,-3.7038,True,2811.0
+rome,Rome,罗马,Italy,europe,41.9028,12.4964,True,2850.0
+istanbul,Istanbul,伊斯坦布尔,Turkey,europe,41.02,29.1,True,2050.0
+barcelona,Barcelona,巴塞罗那,Spain,europe,41.3851,2.1734,True,3424.0
+amsterdam,Amsterdam,阿姆斯特丹,Netherlands,europe,52.3676,4.9041,True,1616.0
+vienna,Vienna,维也纳,Austria,europe,48.2082,16.3738,True,991.0
+athens,Athens,雅典,Greece,europe,37.9838,23.7275,True,547.0
+munich,Munich,慕尼黑,Germany,europe,48.1351,11.582,True,809.0
+milan,Milan,米兰,Italy,europe,45.4642,9.19,True,3156.0
+prague,Prague,布拉格,Czechia,europe,50.0755,14.4378,True,863.0
+stockholm,Stockholm,斯德哥尔摩,Sweden,europe,59.3293,18.0686,True,533.0
+chicago,Chicago,芝加哥,USA,north-america,41.8781,-87.6298,True,5179.0
+toronto,Toronto,多伦多,Canada,north-america,43.6532,-79.3832,True,1951.0
+mexico-city,Mexico City,墨西哥城,Mexico,north-america,19.4326,-99.1332,True,2270.0
+san-francisco,San Francisco,旧金山,USA,north-america,37.7749,-122.4194,True,2367.0
+washington,Washington,华盛顿,USA,north-america,38.9072,-77.0369,True,2458.0
+boston,Boston,波士顿,USA,north-america,42.3601,-71.0589,True,2455.0
+vancouver,Vancouver,温哥华,Canada,north-america,49.2827,-123.1207,True,665.0
+houston,Houston,休斯顿,USA,north-america,29.7604,-95.3698,True,3740.0
+miami,Miami,迈阿密,USA,north-america,25.95,-80.23,True,3256.0
+montreal,Montreal,蒙特利尔,Canada,north-america,45.5017,-73.5673,True,1122.0
+buenos-aires,Buenos Aires,布宜诺斯艾利斯,Argentina,south-america,-34.6037,-58.3816,True,3005.0
+rio,Rio de Janeiro,里约热内卢,Brazil,south-america,-22.9068,-43.1729,True,1772.0
+lima,Lima,利马,Peru,south-america,-12.0464,-77.0428,True,1420.0
+bogota,Bogotá,波哥大,Colombia,south-america,4.711,-74.0721,True,467.0
+santiago,Santiago,圣地亚哥,Chile,south-america,-33.4489,-70.6693,True,1341.0
+caracas,Caracas,加拉加斯,Venezuela,south-america,10.4806,-66.9036,True,398.0
+quito,Quito,基多,Ecuador,south-america,-0.1807,-78.4678,True,527.0
+montevideo,Montevideo,蒙得维的亚,Uruguay,south-america,-34.9011,-56.1645,True,973.0
+lagos,Lagos,拉各斯,Nigeria,africa,6.5244,3.3792,True,1131.0
+johannesburg,Johannesburg,约翰内斯堡,South Africa,africa,-26.2041,28.0473,True,3322.0
+nairobi,Nairobi,内罗毕,Kenya,africa,-1.2921,36.8219,True,632.0
+casablanca,Casablanca,卡萨布兰卡,Morocco,africa,33.5731,-7.5898,True,655.0
+cape-town,Cape Town,开普敦,South Africa,africa,-33.9249,18.4241,True,791.0
+addis-ababa,Addis Ababa,亚的斯亚贝巴,Ethiopia,africa,9.032,38.7469,True,369.0
+kinshasa,Kinshasa,金沙萨,DR Congo,africa,-4.4419,15.2663,True,227.0
+dakar,Dakar,达喀尔,Senegal,africa,14.7167,-17.4677,True,279.0
+dongguan,Dongguan,东莞,China,china,23.05,113.75,False,
+kobe,Kobe,神户,Japan,asia,34.69,135.195,False,
+kyoto,Kyoto,京都,Japan,asia,35.011,135.768,False,
+rotterdam,Rotterdam,鹿特丹,Netherlands,europe,51.92,4.48,False,
+the-hague,The Hague,海牙,Netherlands,europe,52.08,4.31,False,
+baltimore,Baltimore,巴尔的摩,USA,north-america,39.29,-76.61,False,
+providence,Providence,普罗维登斯,USA,north-america,41.82,-71.41,False,
+pretoria,Pretoria,比勒陀利亚,South Africa,africa,-25.7461,28.1881,False,
+brazzaville,Brazzaville,布拉柴维尔,Congo,africa,-4.2661,15.2832,False,
+tarragona,Tarragona,塔拉戈纳,Spain,europe,41.1189,1.2445,False,
+bergamo,Bergamo,贝加莫,Italy,europe,45.6983,9.6773,False,
+brescia,Brescia,布雷西亚,Italy,europe,45.5416,10.2118,False,
+karaj,Karaj,卡拉季,Iran,asia,35.84,50.9391,False,
+qazvin,Qazvin,加兹温,Iran,asia,36.2797,50.0049,False,

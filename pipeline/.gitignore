@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+# raw downloads (a directory, or a symlink to one)
+/data
+out/**/*.tif
+out/**/boundaries/

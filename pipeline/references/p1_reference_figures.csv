@@ -1,0 +1,20 @@
+city,plot,short_label,definition,area_km2,population_m,year,source_url,quality,note
+beijing,1,年鉴,MOHURD 城市建成区面积（市辖区口径）,1469.05,,2022 (may repeat 2019),https://zh.wikipedia.org/zh-hans/中华人民共和国城市建成区面积列表,secondary,"cites 中国城市建设统计年鉴2022; another zh.wiki page says Beijing has not reported since the 2019 yearbook"
+beijing,1,Demog.,Demographia built-up urban area 'Beijing BJ-HEB',4284,22.363,2025,http://www.demographia.com/db-worldua.pdf,primary,20th edition (Aug 2025)
+beijing,0,城区人口(七人普),第七次人口普查 城区常住人口,,17.7517,2020,https://zh.wikipedia.org/zh-hans/中華人民共和國城市城區常住人口排名,secondary,
+beijing,0,城区常住人口,MOHURD 城区人口 + 城区暂住人口,,19.128,2022,https://zh.wikipedia.org/zh-hans/中華人民共和國城市城區常住人口排名,secondary,split into the two parts not verified
+chongqing,1,年鉴,MOHURD 城市建成区面积（市辖区口径）,1645.40,,2022,https://zh.wikipedia.org/zh-hans/中华人民共和国城市建成区面积列表,secondary,another zh.wiki page gives 1640.80 for the same yearbook
+chongqing,1,Demog.,Demographia built-up urban area 'Chongqing CQ',1580,11.524,2025,http://www.demographia.com/db-worldua.pdf,primary,
+chongqing,0,城区人口(七人普),第七次人口普查 城区常住人口,,16.344,2020,https://zh.wikipedia.org/zh-hans/中華人民共和國城市城區常住人口排名,secondary,
+chongqing,0,城区常住人口,MOHURD 城区人口 + 城区暂住人口,,16.175,2022,https://zh.wikipedia.org/zh-hans/中華人民共和國城市城區常住人口排名,secondary,
+chongqing,0,主城九区,主城九区 行政面积,5472.68,,,https://zh.wikipedia.org/zh-hans/重庆主城区,secondary,uncited infobox
+tokyo,1,DID,2020 国勢調査 人口集中地区（東京+神奈川+埼玉+千葉 合计）,3437.52,33.409868,2020,https://hayaokicensus.com/日本の人口集中地区にはどのくらいの人々が住ん/,secondary,"sum of four prefecture rows reproduced from e-Stat; no official combined figure"
+tokyo,0,DID 東京都,2020 国勢調査 人口集中地区 東京都,1091.78,13.844009,2020,https://hayaokicensus.com/日本の人口集中地区にはどのくらいの人々が住ん/,secondary,official stat.go.jp PDF confirms the 98.6% share only
+tokyo,1,Demog.,Demographia built-up urban area 'Tokyo-Yokohama',8775,37.325,2025,http://www.demographia.com/db-worldua.pdf,primary,
+tokyo,0,東京都(行政),東京都 行政面積,2194.03,14.047594,2020,https://hayaokicensus.com/日本の人口集中地区にはどのくらいの人々が住ん/,secondary,
+tokyo,0,23区(行政),特別区 23区 行政面積,627.53,9.733276,2020,https://www.tokyo-23city.or.jp/chosa/tokei/tokubetsuku/r_03/documents/41tokukei-01.pdf,primary,
+paris,1,INSEE,INSEE unité urbaine 2020 de Paris (00851),2824.2,11.013774,2023,https://www.insee.fr/fr/statistiques/2011101?geo=UU2020-00851,primary,area derived as population / density (3899.8 hab/km²)
+paris,0,Demographia,Demographia built-up urban area 'Paris',2854,11.282,2025,http://www.demographia.com/db-worldua.pdf,primary,within 1% of INSEE; not drawn to avoid overlap
+paris,0,巴黎市(行政),Ville de Paris (commune 75056),105.40,2.103778,2023,https://www.insee.fr/fr/statistiques/1405599?geo=UU2020-00851+COM-75056,primary,area derived as population / density; includes Bois de Boulogne and Bois de Vincennes
+new-york,1,Census UA,2020 Census Urban Area 'New York--Jersey City--Newark NY--NJ',8412.6,19.426449,2020,https://www.census.gov/programs-surveys/geography/guidance/geo-areas/urban-rural/2020-ua-facts.html,primary,3248.12 sq mi land
+new-york,1,Demog.,Demographia built-up urban area 'New York NY-NJ-CT',11344,20.892,2025,http://www.demographia.com/db-worldua.pdf,primary,wider combination incl. Bridgeport / New Haven / Trenton

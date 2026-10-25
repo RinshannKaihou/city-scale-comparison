@@ -1,0 +1,79 @@
+id,short_zh,display_zh,name_en,country,region,lon,lat
+beijing,北京,北京,Beijing,China,china,116.3976,39.9054
+shanghai,上海,上海,Shanghai,China,china,121.4737,31.2304
+tokyo,东京,东京（含横滨、川崎、埼玉、千叶）,Tokyo,Japan,asia,139.7671,35.6812
+new-york,纽约,纽约（含纽瓦克、泽西城）,New York,USA,north-america,-74.006,40.7128
+london,伦敦,伦敦,London,UK,europe,-0.1278,51.5074
+paris,巴黎,巴黎,Paris,France,europe,2.3488,48.8534
+moscow,莫斯科,莫斯科,Moscow,Russia,europe,37.6173,55.7558
+sydney,悉尼,悉尼,Sydney,Australia,asia,151.2093,-33.8688
+singapore,新加坡,新加坡,Singapore,Singapore,asia,103.8198,1.3521
+dubai,迪拜,迪拜（含沙迦、阿治曼）,Dubai,UAE,asia,55.2708,25.2048
+mumbai,孟买,孟买（含塔那、新孟买）,Mumbai,India,asia,72.8777,19.076
+sao-paulo,圣保罗,圣保罗,São Paulo,Brazil,south-america,-46.6333,-23.5505
+cairo,开罗,开罗（含吉萨）,Cairo,Egypt,africa,31.2357,30.0444
+los-angeles,洛杉矶,洛杉矶（含长滩、阿纳海姆）,Los Angeles,USA,north-america,-118.2437,34.0522
+seoul,首尔,首尔（含仁川、水原、高阳）,Seoul,South Korea,asia,126.978,37.5665
+xian,西安,西安,Xi'an,China,china,108.9398,34.3416
+prd,珠三角,珠三角（含广州、深圳、佛山、东莞、中山）,Pearl River Delta,China,china,113.2644,23.1291
+chengdu,成都,成都,Chengdu,China,china,104.0657,30.6595
+hangzhou,杭州,杭州（含绍兴）,Hangzhou,China,china,120.1551,30.2741
+chongqing,重庆,重庆,Chongqing,China,china,106.577,29.5576
+tianjin,天津,天津,Tianjin,China,china,117.2009,39.0842
+wuhan,武汉,武汉,Wuhan,China,china,114.3055,30.5928
+nanjing,南京,南京,Nanjing,China,china,118.7969,32.0603
+suzhou,苏州,苏州（含无锡）,Suzhou,China,china,120.5853,31.299
+qingdao,青岛,青岛,Qingdao,China,china,120.3826,36.0671
+dalian,大连,大连,Dalian,China,china,121.6147,38.914
+xiamen,厦门,厦门,Xiamen,China,china,118.0819,24.4798
+hong-kong,香港,香港,Hong Kong,China,china,114.1694,22.3193
+osaka,大阪,大阪（含神户、京都）,Osaka,Japan,asia,135.5023,34.6937
+bangkok,曼谷,曼谷,Bangkok,Thailand,asia,100.5018,13.7563
+jakarta,雅加达,雅加达（含勿加泗、丹格朗、德波、茂物）,Jakarta,Indonesia,asia,106.8456,-6.2088
+manila,马尼拉,马尼拉（含奎松城、加洛干）,Manila,Philippines,asia,120.9842,14.5995
+kuala-lumpur,吉隆坡,吉隆坡（含巴生、八打灵再也）,Kuala Lumpur,Malaysia,asia,101.6869,3.139
+ho-chi-minh,胡志明市,胡志明市（含边和）,Ho Chi Minh,Vietnam,asia,106.7009,10.7769
+delhi,德里,德里（含古尔冈、诺伊达、加济阿巴德）,Delhi,India,asia,77.209,28.6139
+karachi,卡拉奇,卡拉奇,Karachi,Pakistan,asia,67.0011,24.8607
+tehran,德黑兰,德黑兰,Tehran,Iran,asia,51.389,35.6892
+taipei,台北,台北（含新北、桃园、基隆）,Taipei,Taiwan,asia,121.5654,25.033
+melbourne,墨尔本,墨尔本,Melbourne,Australia,asia,144.9631,-37.8136
+auckland,奥克兰,奥克兰,Auckland,New Zealand,asia,174.7633,-36.8485
+berlin,柏林,柏林,Berlin,Germany,europe,13.405,52.52
+madrid,马德里,马德里,Madrid,Spain,europe,-3.7038,40.4168
+rome,罗马,罗马,Rome,Italy,europe,12.4964,41.9028
+istanbul,伊斯坦布尔,伊斯坦布尔,Istanbul,Turkey,europe,28.9784,41.0082
+barcelona,巴塞罗那,巴塞罗那,Barcelona,Spain,europe,2.1734,41.3851
+amsterdam,阿姆斯特丹,阿姆斯特丹,Amsterdam,Netherlands,europe,4.9041,52.3676
+vienna,维也纳,维也纳,Vienna,Austria,europe,16.3738,48.2082
+athens,雅典,雅典（含比雷埃夫斯）,Athens,Greece,europe,23.7275,37.9838
+munich,慕尼黑,慕尼黑,Munich,Germany,europe,11.582,48.1351
+milan,米兰,米兰,Milan,Italy,europe,9.19,45.4642
+prague,布拉格,布拉格,Prague,Czechia,europe,14.4378,50.0755
+stockholm,斯德哥尔摩,斯德哥尔摩,Stockholm,Sweden,europe,18.0686,59.3293
+chicago,芝加哥,芝加哥,Chicago,USA,north-america,-87.6298,41.8781
+toronto,多伦多,多伦多（含密西沙加、布兰普顿）,Toronto,Canada,north-america,-79.3832,43.6532
+mexico-city,墨西哥城,墨西哥城,Mexico City,Mexico,north-america,-99.1332,19.4326
+san-francisco,旧金山,旧金山（含圣何塞、奥克兰）,San Francisco,USA,north-america,-122.4194,37.7749
+washington,华盛顿,华盛顿,Washington,USA,north-america,-77.0369,38.9072
+boston,波士顿,波士顿（含剑桥）,Boston,USA,north-america,-71.0589,42.3601
+vancouver,温哥华,温哥华,Vancouver,Canada,north-america,-123.1207,49.2827
+houston,休斯顿,休斯顿,Houston,USA,north-america,-95.3698,29.7604
+miami,迈阿密,迈阿密（含劳德代尔堡）,Miami,USA,north-america,-80.1937,25.7743
+montreal,蒙特利尔,蒙特利尔,Montreal,Canada,north-america,-73.5673,45.5017
+buenos-aires,布宜诺斯艾利斯,布宜诺斯艾利斯,Buenos Aires,Argentina,south-america,-58.3816,-34.6037
+rio,里约热内卢,里约热内卢,Rio de Janeiro,Brazil,south-america,-43.1729,-22.9068
+lima,利马,利马（含卡亚俄）,Lima,Peru,south-america,-77.0428,-12.0464
+bogota,波哥大,波哥大,Bogotá,Colombia,south-america,-74.0721,4.711
+santiago,圣地亚哥,圣地亚哥,Santiago,Chile,south-america,-70.6693,-33.4489
+caracas,加拉加斯,加拉加斯,Caracas,Venezuela,south-america,-66.9036,10.4806
+quito,基多,基多,Quito,Ecuador,south-america,-78.4678,-0.1807
+montevideo,蒙得维的亚,蒙得维的亚,Montevideo,Uruguay,south-america,-56.1645,-34.9011
+lagos,拉各斯,拉各斯,Lagos,Nigeria,africa,3.3792,6.5244
+johannesburg,约翰内斯堡,约翰内斯堡,Johannesburg,South Africa,africa,28.0473,-26.2041
+nairobi,内罗毕,内罗毕,Nairobi,Kenya,africa,36.8219,-1.2921
+casablanca,卡萨布兰卡,卡萨布兰卡,Casablanca,Morocco,africa,-7.5898,33.5731
+cape-town,开普敦,开普敦,Cape Town,South Africa,africa,18.4241,-33.9249
+addis-ababa,亚的斯亚贝巴,亚的斯亚贝巴,Addis Ababa,Ethiopia,africa,38.7469,9.032
+kinshasa,金沙萨,金沙萨,Kinshasa,DR Congo,africa,15.2663,-4.4419
+dakar,达喀尔,达喀尔,Dakar,Senegal,africa,-17.4677,14.7167
