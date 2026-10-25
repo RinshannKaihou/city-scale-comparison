@@ -117,10 +117,10 @@
 ## 复现
 
 ```bash
-cd city-scale-v2/pipeline
+cd pipeline
 uv run python -I -m citydef.export --force --no-roads   # 重算所有条目的体量与建筑指标（道路文件保留），约 13 分钟
 uv run python -I -m citydef.p3_summary                  # 汇总（含 P4 列）
 
 cd ../web
-node scripts/shots_p4.mjs http://localhost:5174/ shots   # 报告截图
+node scripts/shots_p4.mjs http://localhost:5174/city-scale-comparison/ shots   # 报告截图
 ```

@@ -5,7 +5,7 @@
 ```bash
 pnpm install
 node_modules/.bin/vite --port 5174           # 需要先运行 pipeline: uv run python -I -m citydef.export
-node scripts/bench.mjs http://localhost:5174/ bench-out   # 帧时基准（系统 Chrome，无头模式，真实 GPU）
+node scripts/bench.mjs http://localhost:5174/city-scale-comparison/ bench-out   # 帧时基准（系统 Chrome，无头模式，真实 GPU）
 ```
 
 | 文件 | 作用 |

@@ -123,7 +123,7 @@
 ## 复现
 
 ```bash
-cd city-scale-v2/pipeline
+cd pipeline
 uv run python -I -m citydef.p1b   # 约 45 s，只用 UCDB 矢量，不需要额外下载
 ```
 

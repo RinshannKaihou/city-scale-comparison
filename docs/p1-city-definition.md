@@ -196,7 +196,7 @@
 ## 复现
 
 ```bash
-cd city-scale-v2/pipeline
+cd pipeline
 uv sync
 uv run python -I -m citydef.fetch   # ~1.2 GB：GHSL 瓦片 + UCDB + geoBoundaries
 uv run python -I -m citydef.p1      # ~30 s：指标、边界、图

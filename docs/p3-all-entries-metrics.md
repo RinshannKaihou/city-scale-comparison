@@ -144,13 +144,13 @@
 ## 复现
 
 ```bash
-cd city-scale-v2/pipeline
+cd pipeline
 uv run python -I -m citydef.entries      # 只在修改登记规则时运行；平时直接改 entries.csv
 uv run python -I -m citydef.export       # 下载瓦片 + 导出全部条目（跳过已完成的；--force 全部重做）
 uv run python -I -m citydef.p3_summary   # 汇总 → out/p3/metrics_all.csv
 
 cd ../web
-node_modules/.bin/vite --port 5174                        # http://localhost:5174/
-node scripts/bench.mjs http://localhost:5174/ bench-out   # 6 个帧时场景
-node scripts/shots.mjs http://localhost:5174/ shots       # 报告截图
+node_modules/.bin/vite --port 5174                                              # http://localhost:5174/city-scale-comparison/
+node scripts/bench.mjs http://localhost:5174/city-scale-comparison/ bench-out   # 6 个帧时场景
+node scripts/shots.mjs http://localhost:5174/city-scale-comparison/ shots       # 报告截图
 ```

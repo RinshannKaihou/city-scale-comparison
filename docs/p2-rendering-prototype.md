@@ -130,14 +130,14 @@
 
 ```bash
 # 数据（Overture 查询结果会缓存，第二次很快）
-cd city-scale-v2/pipeline
+cd pipeline
 uv run python -I -m citydef.export               # 写入 ../web/public/data/（P3 起为全部条目）
 
 # 前端
 cd ../web
 pnpm install
-node_modules/.bin/vite --port 5174                # http://localhost:5174/
+node_modules/.bin/vite --port 5174                # http://localhost:5174/city-scale-comparison/
 
 # 基准测试（需开着开发服务器；使用系统 Chrome，无头模式，真实 GPU）
-node scripts/bench.mjs http://localhost:5174/ bench-out
+node scripts/bench.mjs http://localhost:5174/city-scale-comparison/ bench-out
 ```
